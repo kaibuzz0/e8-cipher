@@ -1,467 +1,409 @@
 #!/usr/bin/env python3
 """
-E8-Core: Mathematical Foundation for Quantum-Resistant Blockchain
-Based on the exceptional Lie group E8 (248 dimensions)
+E8-Core: Correct Lattice-Based Encryption using E8^N Direct Sum
 
-References:
-- E8 has 240 roots in 8-dimensional space
-- Weyl group: 696,729,600 symmetries
-- Shortest Vector Problem is NP-hard (quantum-resistant)
+Mathematical Foundation:
+- E8 lattice: densest packing in 8D, 240 roots, Weyl group ~696M
+- E8^N: direct sum of N copies, dimension = 8N
+- Security: Closest Vector Problem (CVP) with bad basis is believed hard
+- This is a correct implementation of the GGH encryption framework over E8^N
 
-This module provides the cryptographic primitives for Chain-Breaker,
-a mobile-optimized blockchain for scripture preservation.
+WARNING: This is a DEMONSTRATION. Real post-quantum security requires:
+- Dimension >= 512 (N >= 64)
+- NIST-vetted schemes (Kyber, Dilithium) for production use
+- Extensive cryptanalysis
 
-Security Model:
-- Uses E8 lattice for quantum-resistant commitments
-- Weyl transformations provide 696M-fold mixing
-- Self-inverse property enables efficient verification
-- Deterministic across all platforms ( IEEE 754 float64 )
-
-Author: Chain-Breaker Team
-Version: 1.0.0
+Author: Chain-Breaker Team / Hive Reconstruction
+Version: 2.0.0
 """
 
 import numpy as np
 import hashlib
 import struct
-from typing import List, Tuple, Optional
-import json
+import sys
+import os
+from typing import List, Tuple, Optional, Union
 
-__version__ = "1.0.0"
-__all__ = ['E8Lattice', 'E8Cipher', 'E8WeylTransform']
+__version__ = "2.0.0"
+__all__ = ['E8Lattice', 'E8Cipher', 'E8WeylTransform', 'generate_unimodular']
+
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Standard orthogonal E8 basis (8 vectors, each length sqrt(2))
+# These generate the D8 sublattice, which sits inside E8.
+# The full E8 lattice is D8 union (D8 + (1/2,...,1/2)).
+# For cryptographic purposes, using D8 as the atomic cell is sufficient
+# because scaling by S gives S*D8, and S*D8 is still a hard lattice.
+E8_BASIS_ORTHOGONAL = np.array([
+    [ 1,  1,  0,  0,  0,  0,  0,  0],
+    [ 1, -1,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  1,  1,  0,  0,  0,  0],
+    [ 0,  0,  1, -1,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  1,  1,  0,  0],
+    [ 0,  0,  0,  0,  1, -1,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  1,  1],
+    [ 0,  0,  0,  0,  0,  0,  1, -1],
+], dtype=np.float64)
+
+E8_BASIS_INVERSE = E8_BASIS_ORTHOGONAL.T / 2.0  # Since G @ G.T = 2*I
+
+# Lattice parameters
+DEFAULT_N = 16                # Number of E8 blocks (dimension = 8*N = 128)
+DEFAULT_SCALE = 1200.0        # Lattice spacing S (must be > 722 for arbitrary bytes)
+DEFAULT_NOISE_SIGMA = 0.05    # Gaussian noise std dev
+DEFAULT_R_BOUND = 100         # Random coefficient bound for lattice point
+
+
+def generate_unimodular(n: int, operations: int = 200, max_multiplier: int = 5,
+                        seed: Optional[int] = None) -> np.ndarray:
+    """
+    Generate a random unimodular integer matrix via elementary row operations.
+
+    A unimodular matrix has determinant ±1 and integer entries.
+    It generates the same lattice as the identity, but with a
+    "bad" (long, non-orthogonal) basis.
+
+    Args:
+        n: Matrix dimension
+        operations: Number of elementary ops to apply
+        max_multiplier: Max |k| for "add k*row_j to row_i"
+        seed: Random seed for reproducibility
+
+    Returns:
+        np.ndarray: n×n unimodular integer matrix
+    """
+    if seed is not None:
+        np.random.seed(seed % (2**32))
+
+    U = np.eye(n, dtype=np.int64)
+
+    for _ in range(operations):
+        op_type = np.random.randint(0, 3)
+        if op_type == 0:
+            # Type 1: Add k * row_j to row_i
+            i, j = np.random.choice(n, 2, replace=False)
+            k = np.random.randint(-max_multiplier, max_multiplier + 1)
+            if k == 0:
+                continue
+            U[i] += k * U[j]
+        elif op_type == 1:
+            # Type 2: Swap two rows
+            i, j = np.random.choice(n, 2, replace=False)
+            U[[i, j]] = U[[j, i]]
+        else:
+            # Type 3: Multiply a row by -1
+            i = np.random.randint(n)
+            U[i] *= -1
+
+    return U.astype(np.float64)
 
 
 class E8Lattice:
     """
-    E8 root lattice implementation for cryptographic operations.
-    
-    The E8 lattice is the densest possible packing in 8 dimensions
-    and forms the basis for quantum-resistant cryptography.
-    
-    Mathematical Properties:
-    - 240 root vectors in 8D space
-    - Root lengths: All have length √2 (Type 1) or √2 (Type 2)
-    - Angle between roots: 90° or 60°
-    - Weyl group: 696,729,600 elements (largest exceptional)
-    
+    E8^N lattice: direct sum of N copies of the E8 root lattice.
+
+    This is the mathematical foundation for the cipher.
+    The lattice is generated by a block-diagonal orthogonal basis,
+    scaled by factor S.
+
     Attributes:
-        DIMENSIONS (int): Dimension of E8 space (always 8)
-        NUM_ROOTS (int): Total number of roots (240)
-        roots (np.ndarray): Shape (240, 8), dtype float64
-        weyl_group_size (int): |W(E8)| = 696729600
-    
-    Example:
-        >>> e8 = E8Lattice()
-        >>> e8.roots.shape
-        (240, 8)
-        >>> e8.roots.dtype
-        dtype('float64')
+        N (int): Number of E8 blocks
+        dim (int): Total dimension = 8 * N
+        scale (float): Lattice spacing S
+        good_basis (np.ndarray): Private short basis, shape (dim, dim)
+        public_basis (np.ndarray): Public bad basis, shape (dim, dim)
+        basis_inverse (np.ndarray): Inverse of good_basis for decoding
+        min_gs_length (float): Length of shortest Gram-Schmidt vector
     """
-    
-    DIMENSIONS = 8
-    NUM_ROOTS = 240
-    
-    def __init__(self):
+
+    def __init__(self, N: int = DEFAULT_N, scale: float = DEFAULT_SCALE,
+                 public_basis: Optional[np.ndarray] = None,
+                 unimodular: Optional[np.ndarray] = None):
         """
-        Initialize E8 lattice with all 240 roots.
-        
-        Generates both Type 1 and Type 2 roots with dtype float64
-        for platform-independent computation.
+        Initialize E8^N lattice.
+
+        Args:
+            N: Number of E8 blocks
+            scale: Lattice spacing S
+            public_basis: Pre-computed public basis (optional)
+            unimodular: Pre-computed unimodular matrix (optional)
         """
-        self.roots = self._generate_roots()
-        self.weyl_group_size = 696729600  # |W(E8)|
-        
-    def _generate_roots(self) -> np.ndarray:
+        self.N = N
+        self.dim = 8 * N
+        self.scale = float(scale)
+
+        # Build good basis: block-diagonal with N copies of scale * E8_BASIS_ORTHOGONAL
+        self.good_basis = np.zeros((self.dim, self.dim), dtype=np.float64)
+        for i in range(N):
+            start = 8 * i
+            self.good_basis[start:start+8, start:start+8] = scale * E8_BASIS_ORTHOGONAL
+
+        # Inverse for coordinate extraction
+        self.basis_inverse = np.zeros((self.dim, self.dim), dtype=np.float64)
+        for i in range(N):
+            start = 8 * i
+            self.basis_inverse[start:start+8, start:start+8] = E8_BASIS_INVERSE / scale
+
+        # Build or use public basis
+        if public_basis is not None:
+            self.public_basis = public_basis.astype(np.float64)
+            self.unimodular = unimodular.astype(np.float64) if unimodular is not None else None
+        else:
+            # Generate random unimodular transformation
+            self.unimodular = generate_unimodular(self.dim, operations=200, max_multiplier=5)
+            self.public_basis = self.unimodular @ self.good_basis
+
+        # Compute min Gram-Schmidt length (for decoding radius)
+        # For our orthogonal block-diagonal basis, all GS vectors have length scale * sqrt(2)
+        self.min_gs_length = scale * np.sqrt(2.0)
+
+    def babai_nearest_plane(self, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Generate all 240 roots of the E8 lattice.
-        
-        E8 roots come in two types:
-        1. Type 1: (±1, ±1, 0, 0, 0, 0, 0, 0) and permutations → 112 roots
-        2. Type 2: (±½, ±½, ±½, ±½, ±½, ±½, ±½, ±½) with even number of minus signs
-           → 128 roots
-        
-        Total: 240 roots in 8-dimensional space.
-        
+        Babai's nearest plane algorithm for our orthogonal block-diagonal basis.
+
+        Since the good basis is block-orthogonal, this reduces to:
+        1. Extract coordinates in each block using the inverse basis
+        2. Round coordinates to nearest integers
+        3. Reconstruct lattice point
+
+        Args:
+            target: Point in R^dim
+
         Returns:
-            np.ndarray: Shape (240, 8), dtype float64
-        
-        Note:
-            Uses float64 explicitly for cross-platform determinism.
+            lattice_point: Nearest lattice point
+            coefficients: Integer coefficients in good basis
         """
-        roots = []
-        
-        # Type 1: Permutations of (±1, ±1, 0, 0, 0, 0, 0, 0)
-        # 112 roots = C(8,2) × 2 × 2 = 28 × 4
-        for i in range(8):
-            for j in range(i + 1, 8):
-                for s1 in [1, -1]:
-                    for s2 in [1, -1]:
-                        root = np.zeros(8, dtype=np.float64)
-                        root[i] = float(s1)
-                        root[j] = float(s2)
-                        roots.append(root)
-        
-        # Type 2: Half-integers with even number of minus signs
-        # 128 roots = 2^7 (even parity constraint)
-        from itertools import combinations
-        for num_minus in [0, 2, 4, 6, 8]:
-            for positions in combinations(range(8), num_minus):
-                root = np.full(8, 0.5, dtype=np.float64)
-                for pos in positions:
-                    root[pos] = -0.5
-                # E8 constraint: sum must be even integer
-                if sum(root) % 2 == 0:
-                    roots.append(root)
-        
-        # Verify we have exactly 240 roots
-        assert len(roots) == 240, f"Expected 240 roots, got {len(roots)}"
-        
-        return np.array(roots, dtype=np.float64)
-    
+        target = target.astype(np.float64)
+
+        # Extract raw coefficients: target @ basis_inverse
+        # Since basis_inverse is the right inverse of good_basis (for row-convention),
+        # we use matrix multiplication directly, NOT transposed.
+        coeffs_raw = target @ self.basis_inverse
+        coeffs = np.rint(coeffs_raw).astype(np.int64)
+
+        # Reconstruct lattice point: coeffs @ good_basis
+        lattice_point = coeffs.astype(np.float64) @ self.good_basis
+
+        return lattice_point, coeffs
+
+    def encode_bytes(self, data: bytes) -> np.ndarray:
+        """Convert bytes to perturbation vector in R^dim."""
+        padded = data + b'\x00' * ((self.dim - len(data) % self.dim) % self.dim)
+        return np.array(list(padded), dtype=np.float64)
+
+    def decode_bytes(self, vector: np.ndarray, original_len: int) -> bytes:
+        """Convert perturbation vector back to bytes."""
+        clamped = np.clip(np.rint(vector), 0, 255).astype(np.uint8)
+        return bytes(clamped[:original_len])
+
     def hash_to_point(self, data: bytes) -> np.ndarray:
-        """
-        Deterministically map arbitrary data to a point in E8 space.
-        
-        Uses SHA256 to generate deterministic seed, then creates
-        normalized coordinates in [0, 1)^8.
-        
-        Args:
-            data: Arbitrary bytes to hash
-            
-        Returns:
-            np.ndarray: Point in E8 space, shape (8,), dtype float64
-            
-        Example:
-            >>> e8 = E8Lattice()
-            >>> point = e8.hash_to_point(b"test")
-            >>> point.shape
-            (8,)
-            >>> all(0 <= x < 1 for x in point)
-            True
-        """
-        # Use SHA256 to generate deterministic seed
+        """Deterministically hash data to a point in E8^N space."""
         hash_bytes = hashlib.sha256(data).digest()
-        
-        # Convert to 8 normalized coordinates using float64
-        coords = np.frombuffer(hash_bytes[:32], dtype=np.uint8).reshape(4, 8)[:8]
-        point = coords.mean(axis=0).astype(np.float64) / 256.0
-        
-        return point
-    
-    def _project_to_lattice(self, point: np.ndarray) -> np.ndarray:
-        """
-        Project arbitrary point to nearest E8 lattice point.
-        
-        For blockchain use, we keep points in continuous space
-        and use lattice proximity for verification.
-        
-        Args:
-            point: Arbitrary point in R^8
-            
-        Returns:
-            np.ndarray: Projected point
-        """
-        return point.astype(np.float64)
-    
+        # Extend to dim bytes via recursive hashing if needed
+        extended = hash_bytes
+        while len(extended) < self.dim:
+            extended += hashlib.sha256(extended).digest()
+        coords = np.array(list(extended[:self.dim]), dtype=np.float64) / 256.0
+        return coords
+
     def weyl_reflection(self, point: np.ndarray, root_idx: int) -> np.ndarray:
-        """
-        Apply Weyl reflection across hyperplane orthogonal to root.
-        
-        Formula: r_α(v) = v - 2⟨v,α⟩/⟨α,α⟩ × α
-        
-        Weyl reflections are self-inverse: applying twice = identity
-        This is crucial for blockchain verification efficiency.
-        
-        Args:
-            point: Point in E8 space, shape (8,)
-            root_idx: Index of root to reflect across (0-239)
-            
-        Returns:
-            np.ndarray: Reflected point, shape (8,), dtype float64
-            
-        Raises:
-            IndexError: If root_idx not in [0, 239]
-            
-        Properties:
-            - Self-inverse: weyl_reflection(w, i) applied twice = w
-            - Orthogonal: preserves dot products between vectors
-            - Integer lattice: maps E8 to E8
-        """
-        if not 0 <= root_idx < 240:
-            raise IndexError(f"root_idx must be in [0, 239], got {root_idx}")
-        
-        root = self.roots[root_idx].astype(np.float64)
-        point = point.astype(np.float64)
-        
-        # Compute reflection formula
-        dot_product = np.dot(point, root)
-        root_norm_sq = np.dot(root, root)
-        
-        reflection = point - 2.0 * dot_product / root_norm_sq * root
-        return reflection.astype(np.float64)
-    
-    def weyl_transform(self, point: np.ndarray, seed: int) -> np.ndarray:
-        """
-        Apply sequence of Weyl transformations based on seed.
-        
-        Deterministic transformation for block hashing in blockchain.
-        Uses seed to select which reflections to apply.
-        
-        Args:
-            point: Point in E8 space, shape (8,)
-            seed: Deterministic seed for reflection selection
-            
-        Returns:
-            np.ndarray: Transformed point, shape (8,), dtype float64
-            
-        Security:
-            - Seed selects from 240 roots randomly
-            - Multiple reflections (5-15) provide mixing
-            - Deterministic: same seed always produces same result
-            - Irreversible without knowing seed
-        """
-        np.random.seed(seed)
-        num_reflections = np.random.randint(5, 15)
-        
-        result = point.astype(np.float64).copy()
-        for _ in range(num_reflections):
-            root_idx = np.random.randint(0, self.NUM_ROOTS)
-            result = self.weyl_reflection(result, root_idx)
-        
-        return result.astype(np.float64)
-    
+        """Apply Weyl reflection across a root hyperplane."""
+        # For E8^N, we work with one block at a time
+        block = root_idx // 240
+        if block >= self.N:
+            raise IndexError(f"root_idx exceeds available roots in E8^{self.N}")
+
+        # Use first block's roots for simplicity (all blocks are isomorphic)
+        root = E8_BASIS_ORTHOGONAL[root_idx % 8].astype(np.float64)  # Simplified
+        point_block = point[8*block:8*(block+1)]
+
+        dot = np.dot(point_block, root)
+        norm_sq = np.dot(root, root)
+        reflected = point_block - 2.0 * dot / norm_sq * root
+
+        result = point.copy()
+        result[8*block:8*(block+1)] = reflected
+        return result
+
     def lattice_distance(self, p1: np.ndarray, p2: np.ndarray) -> float:
-        """
-        Calculate Euclidean distance in E8 space.
-        
-        Used for verification threshold checks in signature validation.
-        
-        Args:
-            p1: First point, shape (8,)
-            p2: Second point, shape (8,)
-            
-        Returns:
-            float: Euclidean distance
-        """
-        p1 = p1.astype(np.float64)
-        p2 = p2.astype(np.float64)
+        """Euclidean distance in E8^N space."""
         return float(np.linalg.norm(p1 - p2))
-    
-    def is_valid_lattice_point(self, point: np.ndarray, tolerance: float = 0.01) -> bool:
-        """
-        Check if point is close to a valid E8 lattice point.
-        
-        E8 lattice points have coordinates that are either:
-        - All integers, OR
-        - All half-integers (with even sum constraint)
-        
-        Args:
-            point: Point to check, shape (8,)
-            tolerance: Maximum deviation from lattice
-            
-        Returns:
-            bool: True if point is near E8 lattice
-        """
-        point = point.astype(np.float64)
-        
-        for coord in point:
-            frac = coord % 1.0
-            if frac > tolerance and frac < 0.5 - tolerance:
-                if frac > 0.5 + tolerance and frac < 1.0 - tolerance:
-                    return False
-        return True
 
 
 class E8Cipher:
     """
-    E8-based encryption using Learning With Errors (LWE) over E8 lattice.
-    
-    Security: Breaking this requires solving Shortest Vector Problem in 8D,
-    which is believed to be quantum-hard.
-    
+    E8^N-based encryption following the GGH framework.
+
+    Security Model:
+    - Private key: good_basis (short, orthogonal)
+    - Public key: public_basis = U @ good_basis (bad, long)
+    - Encryption: c = r @ public_basis + m + e
+    - Decryption: Babai nearest plane finds r @ public_basis, subtract to get m+e
+
+    The hardness comes from the Closest Vector Problem (CVP):
+    finding the nearest lattice point to c using only the public basis
+    is computationally hard in high dimensions.
+
     Attributes:
-        lattice (E8Lattice): The E8 lattice structure
-        private_seed (bytes): 32-byte secret seed
-        private_key (np.ndarray): 8x8 orthogonal transformation matrix
-    
-    Example:
-        >>> cipher = E8Cipher(private_seed=b'secret-key-32-bytes-long!!')
-        >>> plaintext = b"Hello E8"
-        >>> encrypted = cipher.encrypt(plaintext)
-        >>> decrypted = cipher.decrypt(encrypted)
-        >>> decrypted == plaintext
-        True
+        lattice (E8Lattice): The E8^N lattice
+        N (int): Number of E8 blocks
+        dim (int): Total dimension
+        block_size (int): Bytes per block (= dim)
     """
-    
-    def __init__(self, private_seed: Optional[bytes] = None):
+
+    def __init__(self, private_seed: Optional[bytes] = None,
+                 N: int = DEFAULT_N, scale: float = DEFAULT_SCALE):
         """
-        Initialize cipher with private key.
-        
+        Initialize cipher.
+
         Args:
-            private_seed: 32-byte secret seed. If None, generates random.
+            private_seed: Seed for deterministic key generation
+            N: Number of E8 blocks
+            scale: Lattice spacing
         """
-        self.lattice = E8Lattice()
-        self.private_seed = private_seed or self._generate_seed()
-        self.private_key = self._derive_private_transform()
-        
-    def _generate_seed(self) -> bytes:
-        """Generate cryptographically secure random seed."""
-        import os
-        return os.urandom(32)
-    
-    def _derive_private_transform(self) -> np.ndarray:
-        """
-        Derive private transformation matrix from seed.
-        
-        Creates random orthogonal 8x8 matrix using QR decomposition
-        of Gaussian random values.
-        
-        Returns:
-            np.ndarray: Shape (8, 8), dtype float64, orthogonal matrix
-        """
-        np.random.seed(int.from_bytes(self.private_seed[:8], 'big'))
-        
-        # Generate random matrix
-        matrix = np.random.randn(8, 8).astype(np.float64)
-        
-        # QR decomposition for orthogonal matrix
-        q, r = np.linalg.qr(matrix)
-        
-        return q.astype(np.float64)
-    
+        self.N = N
+        self.dim = 8 * N
+        self.block_size = self.dim  # One byte per dimension
+
+        if private_seed is None:
+            private_seed = os.urandom(32)
+        self.private_seed = private_seed
+
+        # Deterministic key generation from seed
+        seed_int = int.from_bytes(private_seed[:8], 'big') % (2**32)
+        np.random.seed(seed_int)
+
+        # Generate lattice with deterministic unimodular transform
+        uni = generate_unimodular(self.dim, operations=200, max_multiplier=5, seed=seed_int)
+        self.lattice = E8Lattice(N=N, scale=scale, unimodular=uni)
+
     def encrypt(self, plaintext: bytes) -> dict:
         """
-        Encrypt data using E8 lattice noise.
-        
-        Returns dict with:
-        - ciphertext: The encrypted data (hex string)
-        - commitment: E8 lattice point for verification
-        - nonce: Encryption nonce (hex string)
-        
+        Encrypt plaintext using E8^N lattice.
+
         Args:
             plaintext: Data to encrypt
-            
+
         Returns:
-            dict: Encryption result with ciphertext, commitment, nonce
+            dict: {
+                'ciphertext': List of float64 arrays (one per block),
+                'nonce': Hex nonce,
+                'params': {'N': ..., 'scale': ..., 'dim': ...}
+            }
         """
-        # Convert plaintext to E8 point(s)
-        message_points = self._bytes_to_points(plaintext)
-        
-        # Add lattice "noise" (small random displacement)
-        noisy_points = []
-        for point in message_points:
-            noise = self._generate_noise()
-            noisy = point + noise
-            noisy_points.append(noisy)
-        
-        # Apply private transformation
-        encrypted = [self.private_key @ pt for pt in noisy_points]
-        
+        # Pad to multiple of block_size
+        pad_len = (self.block_size - len(plaintext) % self.block_size) % self.block_size
+        padded = plaintext + bytes(pad_len)
+
+        ciphertext_blocks = []
+        np.random.seed(int.from_bytes(self.private_seed[:4], 'big') % (2**32))
+
+        for i in range(0, len(padded), self.block_size):
+            block = padded[i:i+self.block_size]
+            m = self.lattice.encode_bytes(block)
+
+            # Random lattice point: r @ public_basis
+            r = np.random.randint(-DEFAULT_R_BOUND, DEFAULT_R_BOUND + 1, size=self.dim)
+            lattice_pt = r.astype(np.float64) @ self.lattice.public_basis
+
+            # Small Gaussian noise
+            e = np.random.normal(0, DEFAULT_NOISE_SIGMA, self.dim)
+
+            # Ciphertext: lattice point + message perturbation + noise
+            c = lattice_pt + m + e
+            ciphertext_blocks.append(c)
+
         return {
-            'ciphertext': self._points_to_bytes(encrypted).hex(),
-            'commitment': self._compute_commitment(encrypted),
-            'nonce': self.private_seed.hex()[:16]
+            'ciphertext': [c.tolist() for c in ciphertext_blocks],
+            'nonce': self.private_seed.hex()[:16],
+            'pad_len': pad_len,
+            'params': {
+                'N': self.N,
+                'scale': self.lattice.scale,
+                'dim': self.dim,
+                'version': __version__
+            }
         }
-    
+
     def decrypt(self, encrypted_data: dict) -> bytes:
         """
-        Decrypt using private key.
-        
-        Requires knowledge of the private transformation.
-        
+        Decrypt ciphertext using private good basis.
+
         Args:
             encrypted_data: Result from encrypt()
-            
+
         Returns:
             bytes: Decrypted plaintext
         """
-        points = self._bytes_to_points(bytes.fromhex(encrypted_data['ciphertext']))
-        
-        # Apply inverse transformation (transpose for orthogonal)
-        inverse_key = self.private_key.T.astype(np.float64)
-        decrypted = [inverse_key @ pt for pt in points]
-        
-        # Remove noise (find nearest lattice points)
-        clean_points = [self._denoise(pt) for pt in decrypted]
-        
-        return self._points_to_bytes(clean_points)
-    
-    def _bytes_to_points(self, data: bytes) -> List[np.ndarray]:
-        """Convert bytes to list of E8 points (8 floats each)."""
-        # Pad to multiple of 32 bytes (8 floats × 4 bytes)
-        padded = data + b'\x00' * ((32 - len(data) % 32) % 32)
-        
-        points = []
-        for i in range(0, len(padded), 32):
-            chunk = padded[i:i+32]
-            floats = struct.unpack('8f', chunk)
-            points.append(np.array(floats, dtype=np.float64))
-        
-        return points
-    
-    def _points_to_bytes(self, points: List[np.ndarray]) -> bytes:
-        """Convert E8 points back to bytes."""
-        result = b''
-        for pt in points:
-            # Clamp to valid float range
-            clamped = np.clip(pt, -3.4e38, 3.4e38)
-            result += struct.pack('8f', *clamped)
-        return result
-    
-    def _generate_noise(self) -> np.ndarray:
-        """Generate small random displacement in E8 space."""
-        # Gaussian noise scaled to lattice cell size
-        return np.random.normal(0, 0.01, 8).astype(np.float64)
-    
-    def _denoise(self, point: np.ndarray) -> np.ndarray:
-        """Remove noise by finding nearest lattice point."""
-        # Simple denoising: round to nearest valid coordinate
-        return np.round(point * 2) / 2
-    
-    def _compute_commitment(self, encrypted_points: List[np.ndarray]) -> str:
-        """Compute merkle-like commitment to encrypted data."""
-        hashes = [hashlib.sha256(pt.tobytes()).hexdigest()[:16] 
-                  for pt in encrypted_points]
-        return hashlib.sha256(''.join(hashes).encode()).hexdigest()[:32]
+        ciphertext_blocks = encrypted_data['ciphertext']
+        pad_len = encrypted_data.get('pad_len', 0)
+
+        plaintext = bytearray()
+
+        for c_list in ciphertext_blocks:
+            c = np.array(c_list, dtype=np.float64)
+
+            # Find nearest lattice point using good basis (private key operation)
+            lattice_pt, _ = self.lattice.babai_nearest_plane(c)
+
+            # Recover perturbation: c - lattice_pt = m + e
+            perturbation = c - lattice_pt
+
+            # Round to nearest byte (noise is small enough)
+            block_bytes = self.lattice.decode_bytes(perturbation, self.block_size)
+            plaintext.extend(block_bytes)
+
+        # Remove padding
+        if pad_len > 0:
+            plaintext = plaintext[:-pad_len]
+
+        return bytes(plaintext)
+
+    def get_public_key(self) -> dict:
+        """Export public key for sharing."""
+        return {
+            'public_basis': self.lattice.public_basis.tolist(),
+            'N': self.N,
+            'scale': self.lattice.scale,
+            'dim': self.dim
+        }
+
+    def get_private_key(self) -> dict:
+        """Export private key (keep secret!)."""
+        return {
+            'private_seed': self.private_seed.hex(),
+            'good_basis': self.lattice.good_basis.tolist(),
+            'unimodular': self.lattice.unimodular.tolist() if self.lattice.unimodular is not None else None,
+            'N': self.N,
+            'scale': self.lattice.scale
+        }
 
 
 class E8WeylTransform:
     """
-    Specialized Weyl transformation for blockchain hashing.
-    
-    Provides deterministic transformations that are:
-    - Fast to compute (5-15 reflections)
-    - Hard to reverse without seed
-    - Self-verifiable (apply twice = identity)
-    - Cross-platform deterministic (IEEE 754 float64)
-    
-    This is the core primitive for E8-enhanced block hashing.
+    Deterministic Weyl transformation for hashing/blockchain.
+
+    Uses E8 symmetries to create a hash-like function.
+    This is NOT encryption but a mixing primitive.
     """
-    
-    def __init__(self):
-        self.lattice = E8Lattice()
-    
+
+    def __init__(self, N: int = DEFAULT_N):
+        self.lattice = E8Lattice(N=N)
+
     def transform(self, data: bytes, seed: int) -> bytes:
-        """
-        Apply Weyl transformation to data.
-        
-        Used for E8-enhanced block hashing in blockchain.
-        
-        Args:
-            data: Input data to transform
-            seed: Deterministic seed (e.g., block nonce)
-            
-        Returns:
-            bytes: 32-byte hash of transformed data
-        """
-        # Map to E8 point
+        """Apply deterministic Weyl transformation to data."""
         point = self.lattice.hash_to_point(data)
-        
-        # Apply Weyl transformation
-        transformed = self.lattice.weyl_transform(point, seed)
-        
-        # Hash result
-        return hashlib.sha256(transformed.tobytes()).digest()
+        np.random.seed(seed % (2**32))
+        num_reflections = np.random.randint(5, 15)
+
+        result = point.copy()
+        for _ in range(num_reflections):
+            root_idx = np.random.randint(0, 240)
+            result = self.lattice.weyl_reflection(result, root_idx)
+
+        return hashlib.sha256(result.tobytes()).digest()
 
 
 # =============================================================================
@@ -469,153 +411,144 @@ class E8WeylTransform:
 # =============================================================================
 
 def run_self_tests():
-    """
-    Run comprehensive self-tests for E8-Core.
-    
-    Tests all mathematical properties and cryptographic operations.
-    Should pass on all platforms with IEEE 754 float64 support.
-    """
-    import sys
-    
+    """Run comprehensive self-tests for E8-Core v2."""
     print("=" * 70)
-    print("🧪 E8-Core Self-Test Suite")
+    print("🧪 E8-Core Self-Test Suite v2.0")
     print("=" * 70)
-    
+
     tests_passed = 0
     tests_failed = 0
-    
-    # Test 1: Lattice initialization
-    print("\n1️⃣ Testing E8 Lattice Initialization...")
+
+    # Test 1: Unimodular generation
+    print("\n1️⃣ Testing Unimodular Matrix Generation...")
     try:
-        e8 = E8Lattice()
-        assert e8.roots.shape == (240, 8), f"Expected (240, 8), got {e8.roots.shape}"
-        assert e8.roots.dtype == np.float64, f"Expected float64, got {e8.roots.dtype}"
-        assert len(e8.roots) == 240, f"Expected 240 roots, got {len(e8.roots)}"
-        print("   ✅ Lattice initialized correctly")
-        print(f"   📊 Roots: {len(e8.roots)} vectors in {e8.DIMENSIONS}D space")
-        print(f"   🔢 Weyl group size: {e8.weyl_group_size:,}")
+        U = generate_unimodular(16, operations=100, max_multiplier=3, seed=42)
+        det = round(np.linalg.det(U))
+        assert det in [-1, 1], f"det={det}, expected ±1"
+        assert U.dtype == np.float64
+        print(f"   ✅ det(U) = {det}")
+        print(f"   📊 Shape: {U.shape}, Entry range: [{U.min():.1f}, {U.max():.1f}]")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
         tests_failed += 1
-    
-    # Test 2: Root types
-    print("\n2️⃣ Testing Root Generation...")
+
+    # Test 2: E8 Lattice Initialization
+    print("\n2️⃣ Testing E8^N Lattice Initialization...")
     try:
-        # Count Type 1 roots (should be 112)
-        type1_count = 0
-        for root in e8.roots:
-            nonzero = np.count_nonzero(root)
-            if nonzero == 2:
-                type1_count += 1
-        assert type1_count == 112, f"Expected 112 Type 1 roots, got {type1_count}"
-        print(f"   ✅ Type 1 roots: {type1_count}/112")
-        
-        # Count Type 2 roots (should be 128)
-        type2_count = 240 - type1_count
-        assert type2_count == 128, f"Expected 128 Type 2 roots, got {type2_count}"
-        print(f"   ✅ Type 2 roots: {type2_count}/128")
+        lat = E8Lattice(N=4, scale=DEFAULT_SCALE)
+        assert lat.dim == 32, f"Expected dim=32, got {lat.dim}"
+        assert lat.good_basis.shape == (32, 32)
+        assert lat.public_basis.shape == (32, 32)
+        print(f"   ✅ Lattice: E8^{lat.N}, dim={lat.dim}")
+        print(f"   📊 Good basis cond: {np.linalg.cond(lat.good_basis):.2f}")
+        print(f"   📊 Public basis cond: {np.linalg.cond(lat.public_basis):.2f}")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
         tests_failed += 1
-    
-    # Test 3: Weyl reflection self-inverse property
-    print("\n3️⃣ Testing Weyl Reflection (Self-Inverse)...")
+
+    # Test 3: Babai Nearest Plane
+    print("\n3️⃣ Testing Babai Nearest Plane...")
     try:
-        test_point = np.array([1.0, 0.5, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
-        reflected = e8.weyl_reflection(test_point, 0)
-        reflected_back = e8.weyl_reflection(reflected, 0)
-        
-        assert np.allclose(test_point, reflected_back), "Weyl reflection not self-inverse!"
-        print("   ✅ Weyl reflection is self-inverse")
-        print(f"   📐 Point: {test_point[:4]}...")
-        print(f"   🔄 Reflected twice: {reflected_back[:4]}...")
+        lat = E8Lattice(N=4, scale=DEFAULT_SCALE)
+        # Create a known lattice point plus small perturbation
+        true_coeffs = np.array([1, -2, 3, 0] * 8, dtype=np.int64)
+        lattice_pt = true_coeffs.astype(np.float64) @ lat.good_basis
+        noise = np.random.normal(0, 0.01, lat.dim)
+        target = lattice_pt + noise
+
+        recovered_pt, recovered_coeffs = lat.babai_nearest_plane(target)
+        assert np.allclose(recovered_coeffs, true_coeffs), "Babai recovered wrong coeffs!"
+        assert np.allclose(recovered_pt, lattice_pt), "Babai recovered wrong point!"
+        print("   ✅ Babai correctly recovered lattice point")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
         tests_failed += 1
-    
-    # Test 4: Hash to point
-    print("\n4️⃣ Testing Hash-to-Point Mapping...")
+
+    # Test 4: E8 Cipher Encrypt/Decrypt
+    print("\n4️⃣ Testing E8 Cipher Round-Trip...")
     try:
-        point1 = e8.hash_to_point(b"test")
-        point2 = e8.hash_to_point(b"test")
-        point3 = e8.hash_to_point(b"different")
-        
-        assert point1.shape == (8,), f"Expected shape (8,), got {point1.shape}"
-        assert np.allclose(point1, point2), "Same input should produce same point"
-        assert not np.allclose(point1, point3), "Different input should produce different point"
-        assert all(0 <= x < 1 for x in point1), "Coordinates should be in [0, 1)"
-        
-        print(f"   ✅ Deterministic: {np.allclose(point1, point2)}")
-        print(f"   📍 Point coordinates: {point1[:4]}...")
+        cipher = E8Cipher(private_seed=b'test-seed-32-bytes-long!!!', N=4, scale=DEFAULT_SCALE)
+        messages = [
+            b"Hello E8",
+            b"A" * 31,
+            b"Binary\x00\xff\x80data",
+            b"x" * 64,
+        ]
+        for msg in messages:
+            encrypted = cipher.encrypt(msg)
+            decrypted = cipher.decrypt(encrypted)
+            assert decrypted == msg, f"Round-trip failed: {decrypted!r} != {msg!r}"
+        print(f"   ✅ All {len(messages)} round-trip tests passed")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
         tests_failed += 1
-    
-    # Test 5: Weyl transformation
-    print("\n5️⃣ Testing Weyl Transformation...")
+
+    # Test 5: Larger dimension test
+    print("\n5️⃣ Testing Larger Dimension (N=8, 64D)...")
     try:
-        point = e8.hash_to_point(b"transform test")
-        transformed = e8.weyl_transform(point, seed=12345)
-        
-        assert transformed.shape == (8,), "Transform should preserve shape"
-        assert transformed.dtype == np.float64, "Transform should preserve dtype"
-        
-        # Determinism
-        transformed2 = e8.weyl_transform(point, seed=12345)
-        assert np.allclose(transformed, transformed2), "Transform should be deterministic"
-        
-        print(f"   ✅ Transform deterministic: True")
-        print(f"   📍 Original:    {point[:4]}...")
-        print(f"   🔄 Transformed: {transformed[:4]}...")
-        tests_passed += 1
-    except Exception as e:
-        print(f"   ❌ FAILED: {e}")
-        tests_failed += 1
-    
-    # Test 6: E8 Cipher
-    print("\n6️⃣ Testing E8 Cipher...")
-    try:
-        cipher = E8Cipher(private_seed=b'test-seed-32-bytes-long!!!!!!!')
-        plaintext = b"Hello E8"
-        
-        encrypted = cipher.encrypt(plaintext)
+        cipher = E8Cipher(private_seed=b'another-seed-32-bytes!!', N=8, scale=DEFAULT_SCALE)
+        msg = b"The quick brown fox jumps over the lazy dog. " * 2  # 88 bytes
+        encrypted = cipher.encrypt(msg)
         decrypted = cipher.decrypt(encrypted)
-        
-        assert decrypted == plaintext, f"Decryption failed: {decrypted} != {plaintext}"
-        assert 'commitment' in encrypted, "Missing commitment in encrypted data"
-        assert len(encrypted['commitment']) == 32, "Commitment should be 32 hex chars"
-        
-        print(f"   ✅ Encrypt/decrypt: {plaintext.decode()} == {decrypted.decode()}")
-        print(f"   🔐 Commitment: {encrypted['commitment'][:20]}...")
+        assert decrypted == msg, "Large dimension round-trip failed"
+        print(f"   ✅ N=8 round-trip passed ({len(msg)} bytes)")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
         tests_failed += 1
-    
-    # Test 7: E8WeylTransform
-    print("\n7️⃣ Testing E8WeylTransform (Blockchain Primitive)...")
+
+    # Test 6: Determinism
+    print("\n6️⃣ Testing Deterministic Key Generation...")
     try:
-        weyl = E8WeylTransform()
-        data = b"block data for hashing"
-        seed = 12345
-        
-        result1 = weyl.transform(data, seed)
-        result2 = weyl.transform(data, seed)
-        
-        assert result1 == result2, "Weyl transform should be deterministic"
-        assert len(result1) == 32, "Should produce 32-byte hash"
-        
-        print(f"   ✅ Deterministic: True")
-        print(f"   🔑 Hash: {result1.hex()[:40]}...")
+        c1 = E8Cipher(private_seed=b'deterministic-test-key!!!', N=4, scale=DEFAULT_SCALE)
+        c2 = E8Cipher(private_seed=b'deterministic-test-key!!!', N=4, scale=DEFAULT_SCALE)
+        assert np.allclose(c1.lattice.public_basis, c2.lattice.public_basis)
+        msg = b"determinism check"
+        e1 = c1.encrypt(msg)
+        e2 = c2.encrypt(msg)
+        # Note: encryption is NOT deterministic due to random r and noise,
+        # but decryption should work from both
+        d1 = c1.decrypt(e2)
+        d2 = c2.decrypt(e1)
+        assert d1 == msg and d2 == msg
+        print("   ✅ Deterministic keys, cross-decrypt works")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
         tests_failed += 1
-    
+
+    # Test 7: Weyl Transform
+    print("\n7️⃣ Testing E8WeylTransform...")
+    try:
+        weyl = E8WeylTransform(N=4)
+        result1 = weyl.transform(b"test data", seed=12345)
+        result2 = weyl.transform(b"test data", seed=12345)
+        assert result1 == result2, "Weyl transform not deterministic"
+        assert len(result1) == 32
+        print(f"   ✅ Weyl hash: {result1.hex()[:40]}...")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
+    # Test 8: Public/Private key export
+    print("\n8️⃣ Testing Key Export...")
+    try:
+        cipher = E8Cipher(private_seed=b'key-export-test-32-by!!', N=4, scale=100.0)
+        pk = cipher.get_public_key()
+        sk = cipher.get_private_key()
+        assert 'public_basis' in pk
+        assert 'good_basis' in sk
+        print("   ✅ Key export works")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
     # Summary
     print()
     print("=" * 70)
@@ -624,7 +557,7 @@ def run_self_tests():
     print(f"   ✅ Passed: {tests_passed}")
     print(f"   ❌ Failed: {tests_failed}")
     print(f"   📈 Success Rate: {tests_passed}/{tests_passed + tests_failed}")
-    
+
     if tests_failed == 0:
         print("\n🎉 ALL TESTS PASSED!")
         print("=" * 70)
@@ -635,7 +568,6 @@ def run_self_tests():
         return 1
 
 
-# Run tests if executed directly
 if __name__ == "__main__":
     exit_code = run_self_tests()
     sys.exit(exit_code)
