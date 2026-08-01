@@ -5,6 +5,34 @@
 
 > **E8^N Direct-Sum Lattice Encryption — A Correct Implementation of the GGH Framework**
 
+## ⚡ Project Status: ARCHIVED — v2.1 Complete
+
+**Development on this codebase has paused as of 2026-08-01.**
+
+The repository is **fully functional and tested**, with the following deliverables complete:
+
+| Feature | Status |
+|---|---|
+| E8^N GGH lattice encryption | ✅ Working, round-trip tested |
+| Perturbation-hardened public basis | ✅ Prevents verbatim secret vectors |
+| Babai nearest-plane decryption | ✅ Correct on perturbed basis |
+| LLL lattice reduction analysis | ✅ Self-test suite built |
+| E8 Merkle-Damgård hash | ✅ Passes avalanche/determinism tests |
+| API documentation | ✅ Complete with examples |
+| Performance benchmarks | ✅ Measured on ARM64 |
+
+**Known Limitations (documented, not bugs):**
+- The GGH framework remains **vulnerable to lattice-reduction attacks** (LLL, BKZ) at tested dimensions (32D–128D). The perturbation matrix helps but does not eliminate the structural weakness.
+- **Not NIST-approved** and not intended for production use.
+- Ciphertext expansion is ~20× due to JSON float64 serialization.
+- No formal security proof is provided.
+
+**This repo is a research artifact.** It demonstrates a mathematically correct implementation of the GGH encryption scheme over E8^N lattices, with honest self-assessment tools. The Option D roadmap (Ring-E8 Module-LWE) remains open for future research.
+
+**If you fork this:** The core is solid for educational and prototyping purposes. The next hard step is algebraic — moving from direct-sum E8^N to a module-lattice structure over polynomial rings.
+
+---
+
 ## 🔬 Mathematical Foundation
 
 The E8 exceptional Lie group provides:
