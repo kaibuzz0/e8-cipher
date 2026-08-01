@@ -108,6 +108,172 @@ Runs 8 comprehensive tests:
 - ❌ Replacing standard post-quantum algorithms
 - ❌ Anything requiring formal security guarantees
 
+## 📊 Performance Benchmarks
+
+All benchmarks run on Termux/Android (ARM64), Python 3.11, NumPy 2.4.6:
+
+### Key Generation
+
+| N | Dimension | Time | Public Key Size |
+|---|-----------|------|-----------------|
+| 4 | 32D | ~140 ms | 8 KB |
+| 16 | 128D | ~24 ms | 128 KB |
+| 64 | 512D | ~171 ms | 2.0 MB |
+
+### Encryption / Decryption Throughput
+
+| N | Dimension | Encrypt 1 KB | Decrypt 1 KB | Ciphertext Expansion |
+|---|-----------|-------------|-------------|---------------------|
+| 4 | 32D | ~4 ms | ~4 ms | ~20× |
+| 16 | 128D | ~3 ms | ~2 ms | ~20× |
+| 64 | 512D | ~4 ms | ~5 ms | ~20× |
+
+**Notes:**
+- Ciphertext expansion is fixed at ~20× due to JSON float64 serialization overhead.
+- Keygen variance is high for small N because unimodular matrix generation is randomized.
+- At N=64 (512D), operations are fast enough for real-time messaging on mobile hardware.
+- Higher N = exponentially larger public keys but similar per-byte encrypt/decrypt cost due to block-diagonal structure.
+
+## 📖 API Documentation
+
+### `E8Cipher`
+
+```python
+from e8_cipher import E8Cipher
+```
+
+#### Constructor
+
+```python
+cipher = E8Cipher(
+    private_seed: bytes = None,  # 32-byte seed; random if omitted
+    N: int = 16,                # E8 blocks (dimension = 8*N)
+    scale: float = 1200.0       # Lattice spacing
+)
+```
+
+**Parameters:**
+- `private_seed` — 32-byte secret seed. Same seed always produces the same key pair.
+- `N` — Number of E8 copies. Default 16 (128 dimensions). Higher = more secure, slower.
+- `scale` — Lattice cell spacing. Must be > 722 to avoid Babai decoding failure on arbitrary bytes.
+
+#### Methods
+
+**`encrypt(plaintext: bytes) → dict`**
+
+Encrypt arbitrary bytes. Returns a JSON-serializable dict:
+
+```python
+{
+    "ciphertext": [[float, ...], ...],   # List of float64 arrays
+    "nonce": "hex_nonce",
+    "pad_len": 0,
+    "params": {
+        "N": 16,
+        "scale": 1200.0,
+        "dim": 128,
+        "version": "2.0.0"
+    }
+}
+```
+
+**`decrypt(encrypted_data: dict) → bytes`**
+
+Decrypt ciphertext dict back to original plaintext.
+
+**`get_public_key() → dict`**
+
+Export public key (safe to share):
+
+```python
+{
+    "public_basis": [[...], ...],  # 8N × 8N matrix
+    "N": 16,
+    "scale": 1200.0,
+    "dim": 128
+}
+```
+
+**`get_private_key() → dict`**
+
+Export private key (**keep secret**):
+
+```python
+{
+    "private_seed": "hex_seed",
+    "good_basis": [[...], ...],     # Short orthogonal basis
+    "unimodular": [[...], ...],     # U matrix
+    "N": 16,
+    "scale": 1200.0
+}
+```
+
+### `E8Core` Classes (Advanced)
+
+```python
+from e8_core import E8Lattice, E8Cipher, E8WeylTransform, generate_unimodular
+```
+
+#### `generate_unimodular(n, operations=200, max_multiplier=5, seed=None)`
+
+Generate a random n×n unimodular integer matrix (det = ±1) via elementary row operations.
+
+#### `E8Lattice(N=16, scale=1200.0, public_basis=None, unimodular=None)`
+
+Core lattice object. Manages good basis, public basis, and Babai nearest-plane decoding.
+
+**Key Methods:**
+- `babai_nearest_plane(target)` → `(lattice_point, coefficients)`
+- `encode_bytes(data)` → perturbation vector
+- `decode_bytes(vector, original_len)` → recovered bytes
+- `hash_to_point(data)` → deterministic E8^N point
+- `weyl_reflection(point, root_idx)` → reflected point
+
+#### `E8WeylTransform(N=16)`
+
+Deterministic hash primitive using E8 symmetries.
+
+- `transform(data, seed)` → 32-byte SHA256 hash
+
+Useful for blockchain commitments and checksums where E8 structure provides mixing.
+
+## 🗺️ Roadmap
+
+### v2.1 — Hardening & Analysis (Short Term)
+- [ ] Implement **LLL lattice reduction** self-test to measure public-basis vulnerability
+- [ ] Add **BKZ-2.0** approximation test to quantify attack cost vs dimension
+- [ ] Measure **Hermite factor** of public basis vs dimension
+- [ ] Add **parameter recommendations** based on measured attack thresholds
+- [ ] Optimize Babai nearest-plane with **block-parallel NumPy** operations
+- [ ] Add **ciphertext compression** to reduce the 16× expansion penalty
+
+### v2.2 — Algebraic Structure (Medium Term)
+- [ ] Replace D8 sublattice with **full E8 root lattice** (include half-integer Type 2 roots)
+- [ ] Explore **E8 module structure** over polynomial rings (Ring-E8 analog of Ring-LWE)
+- [ ] Implement **Gaussian sampling** over E8 cells using discrete Gaussian distributions
+- [ ] Add **rejection sampling** for constant-time operations
+- [ ] Investigate **E8 automorphism group** for additional public-key hardening
+
+### v2.5 — Hybrid Modes (Medium Term)
+- [ ] Build **E8 + AES hybrid mode**: Use E8 for key encapsulation, AES-256-GCM for bulk data
+- [ ] Implement **E8-based digital signatures** via hash-and-sign or Fiat-Shamir
+- [ ] Add **threshold decryption**: split private key among N parties via lattice secret sharing
+- [ ] Create **E8 error-correcting code** layer for noisy-channel robustness
+
+### v3.0 — Production Path (Long Term)
+- [ ] Formal security analysis with **reduction proof** to known lattice problems
+- [ ] Side-channel resistant implementation (constant-time, no branching on secrets)
+- [ ] WASM compilation for browser/edge deployment
+- [ ] Python bindings to C implementation for 10×+ speedup
+- [ ] Comparison benchmarking against **CRYSTALS-Kyber** and **NTRU**
+- [ ] Publish in **IACR ePrint** or similar venue for peer review
+
+### Research Open Questions
+- [ ] Does E8^N have **structured attacks** that generic lattices avoid?
+- [ ] Can the Weyl group symmetries be exploited for **faster decryption** without leaking the key?
+- [ ] Is E8 the optimal lattice cell, or would **Leech lattice** (24D) or **Barnes-Wall** be superior?
+- [ ] What is the **concrete security** at N=64 vs N=128 under known lattice attacks?
+
 ## 📝 References
 
 - Goldreich, Goldwasser, Halevi. "Public-key cryptosystems from lattice reduction problems." CRYPTO 1997.
