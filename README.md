@@ -148,7 +148,8 @@ from e8_cipher import E8Cipher
 cipher = E8Cipher(
     private_seed: bytes = None,  # 32-byte seed; random if omitted
     N: int = 16,                # E8 blocks (dimension = 8*N)
-    scale: float = 1200.0       # Lattice spacing
+    scale: float = 1200.0,      # Lattice spacing
+    perturbation: np.ndarray = None  # Optional custom perturbation matrix
 )
 ```
 
@@ -156,6 +157,9 @@ cipher = E8Cipher(
 - `private_seed` — 32-byte secret seed. Same seed always produces the same key pair.
 - `N` — Number of E8 copies. Default 16 (128 dimensions). Higher = more secure, slower.
 - `scale` — Lattice cell spacing. Must be > 722 to avoid Babai decoding failure on arbitrary bytes.
+- `perturbation` — Optional dense perturbation matrix added to `good_basis` before unimodular transform.
+  Prevents secret basis vectors from appearing verbatim in the public basis.
+  If omitted, a deterministic ~1%-scale perturbation is auto-generated.
 
 #### Methods
 
@@ -237,24 +241,70 @@ Deterministic hash primitive using E8 symmetries.
 
 Useful for blockchain commitments and checksums where E8 structure provides mixing.
 
+#### `E8MerkleHasher(N=16)`
+
+Full **Merkle-Damgård hash function** using E8 Weyl symmetries as the compression core.
+
+- `hash(message)` → 32-byte hash digest
+- `hash_hex(message)` → hex string
+
+```python
+from e8_core import E8MerkleHasher
+
+hasher = E8MerkleHasher(N=4)
+digest = hasher.hash(b"Hello E8")
+```
+
+Architecture:
+- Block size: 32 bytes (SHA256 output size)
+- IV: Deterministic E8-derived seed
+- Compression: `state = SHA256(WeylTransform(state ⊕ block, seed=block_hash) + state + block)`
+- Passes avalanche test (~50% bit flip on single-byte change)
+
+**Note:** This is a custom hash primitive, not a NIST-approved hash function.
+Use for research, blockchain commitments, or as a mixing layer — not for
+applications requiring SHA-3/BLAKE3 guarantees.
+
+### `run_lattice_security_analysis(N_values)`
+
+Run automated LLL reduction and vulnerability assessment:
+
+```python
+from e8_core import run_lattice_security_analysis
+
+results = run_lattice_security_analysis(N_values=[4, 8, 16])
+# Prints per-dimension metrics: RHF, LLL time, security estimate
+```
+
+Outputs:
+- Pre/post-LLL shortest vector lengths
+- Hermite factor and root Hermite factor
+- Estimated security interpretation (VULNERABLE / MODERATE / STRONG)
+
 ## 🗺️ Roadmap
 
-### v2.1 — Hardening & Analysis (Short Term)
-- [ ] Implement **LLL lattice reduction** self-test to measure public-basis vulnerability
-- [ ] Add **BKZ-2.0** approximation test to quantify attack cost vs dimension
-- [ ] Measure **Hermite factor** of public basis vs dimension
+### v2.1 — Lattice Hardening (Complete)
+- [x] Implement **perturbation matrix** to prevent verbatim secret basis vectors in public basis
+- [x] Add **LLL lattice reduction self-test** to measure public-basis vulnerability
+- [x] Add **E8 Merkle-Damgård hash function** for blockchain commitments
+- [ ] Add **BKZ approximation** test to quantify higher-block-size attack cost
+- [ ] Measure **Hermite factor** of public basis vs dimension with perturbation
 - [ ] Add **parameter recommendations** based on measured attack thresholds
-- [ ] Optimize Babai nearest-plane with **block-parallel NumPy** operations
-- [ ] Add **ciphertext compression** to reduce the 16× expansion penalty
 
-### v2.2 — Algebraic Structure (Medium Term)
+### v2.2 — Performance & Compression (Short Term)
+- [ ] Optimize Babai nearest-plane with **block-parallel NumPy** operations
+- [ ] Add **ciphertext compression** to reduce the 20× expansion penalty (raw bytes instead of JSON)
+- [ ] Add **streaming encryption** for large files (process block by block)
+- [ ] Benchmark memory usage for N=64 and N=128
+
+### v2.5 — Algebraic Structure (Medium Term)
 - [ ] Replace D8 sublattice with **full E8 root lattice** (include half-integer Type 2 roots)
 - [ ] Explore **E8 module structure** over polynomial rings (Ring-E8 analog of Ring-LWE)
 - [ ] Implement **Gaussian sampling** over E8 cells using discrete Gaussian distributions
 - [ ] Add **rejection sampling** for constant-time operations
 - [ ] Investigate **E8 automorphism group** for additional public-key hardening
 
-### v2.5 — Hybrid Modes (Medium Term)
+### v2.6 — Hybrid Modes (Medium Term)
 - [ ] Build **E8 + AES hybrid mode**: Use E8 for key encapsulation, AES-256-GCM for bulk data
 - [ ] Implement **E8-based digital signatures** via hash-and-sign or Fiat-Shamir
 - [ ] Add **threshold decryption**: split private key among N parties via lattice secret sharing
@@ -268,11 +318,38 @@ Useful for blockchain commitments and checksums where E8 structure provides mixi
 - [ ] Comparison benchmarking against **CRYSTALS-Kyber** and **NTRU**
 - [ ] Publish in **IACR ePrint** or similar venue for peer review
 
+### 🔬 Option D: Ring-E8 Module-LWE (Back Burner / Research)
+This is the long-term path to genuine post-quantum security using E8 structure.
+Replace the direct-sum E8^N with a **module lattice over a polynomial ring**:
+
+```
+R = Z[x] / (x^n + 1)          # Polynomial ring
+M = R^8                          # Module of rank 8 over R
+Lattice = φ(M) ⊂ R^(8n)          # Embedding into real space
+```
+
+Each coefficient is an E8 lattice point, but the global structure is a **polynomial module**
+rather than a block-diagonal direct sum. This provides:
+- **Ring-LWE hardness** (NIST-vetted security foundation)
+- **Fast polynomial arithmetic** (NTT for O(n log n) multiplication)
+- **E8 structure** at the coefficient level (densest packing in each module component)
+
+Challenges:
+- Requires **algebraic number theory** (E8 as a module over a ring of integers)
+- **Discrete Gaussian sampling** with covariance matching E8 geometry
+- **Rejection sampling** for constant-time key generation
+- **Security proof** reducing to Module-LWE + E8 automorphism hardness
+
+This is 6–12 months of full-time research. The current E8^N direct sum is the
+proof-of-concept; Ring-E8 is the destination.
+
 ### Research Open Questions
 - [ ] Does E8^N have **structured attacks** that generic lattices avoid?
 - [ ] Can the Weyl group symmetries be exploited for **faster decryption** without leaking the key?
 - [ ] Is E8 the optimal lattice cell, or would **Leech lattice** (24D) or **Barnes-Wall** be superior?
 - [ ] What is the **concrete security** at N=64 vs N=128 under known lattice attacks?
+- [ ] Does the **perturbation matrix** provide meaningful security gain, or just slow LLL slightly?
+- [ ] Can **E8 automorphisms** be used to randomize the public basis without a trapdoor?
 
 ## 📝 References
 
