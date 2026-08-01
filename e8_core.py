@@ -22,10 +22,13 @@ import hashlib
 import struct
 import sys
 import os
+import time
 from typing import List, Tuple, Optional, Union
 
 __version__ = "2.0.0"
-__all__ = ['E8Lattice', 'E8Cipher', 'E8WeylTransform', 'generate_unimodular']
+__all__ = ['E8Lattice', 'E8Cipher', 'E8WeylTransform', 'generate_unimodular',
+           'gram_schmidt', 'lll_reduce', 'hermite_factor', 'root_hermite_factor',
+           'estimate_attack_cost', 'run_lattice_security_analysis']
 
 # =============================================================================
 # CONSTANTS
@@ -407,6 +410,286 @@ class E8WeylTransform:
 
 
 # =============================================================================
+# LATTICE REDUCTION & SECURITY ANALYSIS
+# =============================================================================
+
+def gram_schmidt(basis: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Classical Gram-Schmidt orthogonalization.
+
+    Args:
+        basis: (n, m) matrix where each row is a basis vector
+
+    Returns:
+        B_star: (n, m) orthogonal vectors
+        mu: (n, n) Gram-Schmidt coefficients where mu[i,j] = <b_i, b_j^*> / <b_j^*, b_j^*>
+    """
+    n = basis.shape[0]
+    B_star = basis.astype(np.float64).copy()
+    mu = np.zeros((n, n), dtype=np.float64)
+
+    for i in range(n):
+        for j in range(i):
+            mu[i, j] = np.dot(basis[i], B_star[j]) / np.dot(B_star[j], B_star[j])
+            B_star[i] -= mu[i, j] * B_star[j]
+        mu[i, i] = 1.0
+
+    return B_star, mu
+
+
+def lll_reduce(basis: np.ndarray, delta: float = 0.75, max_swaps: int = 100000) -> np.ndarray:
+    """
+    Lenstra-Lenstra-Lovász lattice reduction algorithm.
+
+    Given a basis for a lattice, produces a new basis that is "nearly orthogonal"
+    and contains relatively short vectors. The reduced basis quality is controlled
+    by parameter delta (typically 0.75 or 0.99).
+
+    Args:
+        basis: (n, m) matrix, rows are basis vectors
+        delta: Lovász parameter. Closer to 1 = stronger reduction but slower.
+        max_swaps: Safety limit to prevent infinite loops on pathological input.
+
+    Returns:
+        np.ndarray: LLL-reduced basis, same shape as input
+
+    Raises:
+        RuntimeError: If max_swaps exceeded (basis may be degenerate)
+    """
+    n = basis.shape[0]
+    B = basis.astype(np.float64).copy()
+    B_star, mu = gram_schmidt(B)
+
+    swap_count = 0
+    i = 1
+
+    while i < n:
+        # Step 1: Size reduction
+        for j in range(i - 1, -1, -1):
+            if abs(mu[i, j]) > 0.5:
+                q = int(round(mu[i, j]))
+                B[i] -= q * B[j]
+                # Update Gram-Schmidt coefficients
+                for k in range(j + 1):
+                    mu[i, k] -= q * mu[j, k]
+
+        # Step 2: Lovász condition
+        lhs = np.dot(B_star[i], B_star[i])
+        rhs = (delta - mu[i, i - 1] ** 2) * np.dot(B_star[i - 1], B_star[i - 1])
+
+        if lhs < rhs:
+            # Swap b_i and b_{i-1}
+            B[[i, i - 1]] = B[[i - 1, i]]
+            swap_count += 1
+            if swap_count > max_swaps:
+                raise RuntimeError(f"LLL exceeded max_swaps={max_swaps}. Basis may be degenerate.")
+            # Recompute GS for swapped pair
+            B_star, mu = gram_schmidt(B)
+            i = max(i - 1, 1)
+        else:
+            i += 1
+
+    return B
+
+
+def hermite_factor(basis: np.ndarray) -> float:
+    """
+    Compute the Hermite factor using log-space for numerical stability.
+
+    HF = ||b_1|| / (prod_i ||b_i^*||)^(1/n)
+    where b_i^* are the Gram-Schmidt orthogonalized vectors.
+
+    Args:
+        basis: (n, m) basis matrix
+
+    Returns:
+        float: Hermite factor
+    """
+    n = basis.shape[0]
+    first_norm = np.linalg.norm(basis[0])
+
+    # Compute Gram-Schmidt to get ||b_i^*||
+    B_star, _ = gram_schmidt(basis)
+    gs_lengths = np.linalg.norm(B_star, axis=1)
+
+    # Log-space product to avoid overflow
+    log_prod = np.sum(np.log(gs_lengths + 1e-300))
+    det_root = np.exp(log_prod / n)
+
+    if det_root <= 0 or not np.isfinite(det_root):
+        return float('inf')
+
+    return first_norm / det_root
+
+
+def root_hermite_factor(basis: np.ndarray) -> float:
+    """
+    Compute the root Hermite factor: (||b_1|| / det^(1/n))^(1/n).
+
+    This is the standard metric for lattice reduction quality.
+    - LLL achieves ~1.021
+    - BKZ-20 achieves ~1.013
+    - BKZ-50 achieves ~1.010
+    - Optimal (theoretical) ~1.000
+
+    In GGH cryptanalysis, if an attacker can achieve a small root Hermite factor
+    on the public basis, they can find short vectors that reveal the structure.
+
+    Args:
+        basis: (n, m) basis matrix
+
+    Returns:
+        float: Root Hermite factor
+    """
+    n = basis.shape[0]
+    hf = hermite_factor(basis)
+    return hf ** (1.0 / n)
+
+
+def estimate_attack_cost(dim: int, root_hermite: float) -> dict:
+    """
+    Estimate the computational cost of a lattice attack.
+
+    Uses the Lindner-Peikner heuristic: attack cost in "bits of security"
+    is approximately the dimension divided by the root Hermite factor gap
+    from optimal.
+
+    Args:
+        dim: Lattice dimension
+        root_hermite: Achieved root Hermite factor
+
+    Returns:
+        dict: Estimated attack metrics
+    """
+    # Theoretical optimal Hermite constant for dimension dim (approximate)
+    gamma_n = (dim / (2 * np.pi * np.e)) ** (1 / dim) * np.sqrt(dim / (2 * np.pi * np.e))
+    optimal_rhf = gamma_n ** (1.0 / dim)
+
+    # Gap from optimal (smaller gap = harder)
+    gap = root_hermite - optimal_rhf
+
+    # Heuristic bit security estimate (very rough)
+    # In practice this requires BKZ block size analysis
+    if gap <= 0:
+        security_bits = float('inf')
+    else:
+        # Lindner-Peikner-style estimate: security ~ dim / gap^2
+        security_bits = dim / (gap ** 2)
+
+    return {
+        'dimension': dim,
+        'root_hermite_factor': float(root_hermite),
+        'optimal_rhf': float(optimal_rhf),
+        'gap_from_optimal': float(gap),
+        'estimated_security_bits': float(security_bits) if np.isfinite(security_bits) else 'infinite',
+        'interpretation': 'VULNERABLE' if root_hermite < 1.01 else 'MODERATE' if root_hermite < 1.02 else 'STRONG'
+    }
+
+
+def run_lattice_security_analysis(N_values: List[int] = None, scale: float = 1200.0) -> dict:
+    """
+    Run LLL lattice reduction on public bases for multiple dimensions
+    and report vulnerability metrics.
+
+    Args:
+        N_values: List of E8 block counts to test. Default [4, 8, 16].
+        scale: Lattice scale.
+
+    Returns:
+        dict: Analysis results per dimension.
+    """
+    if N_values is None:
+        N_values = [4, 8, 16]
+
+    print("=" * 70)
+    print("🛡️  Lattice Security Analysis: LLL Reduction on Public Basis")
+    print("=" * 70)
+
+    results = {}
+
+    for N in N_values:
+        dim = 8 * N
+        print(f"\n📊 Testing N={N} ({dim}D)...")
+
+        try:
+            # Generate lattice
+            cipher = E8Cipher(private_seed=b'security-analysis-32-bytes!!', N=N, scale=scale)
+            pub = np.array(cipher.get_public_key()['public_basis'], dtype=np.float64)
+
+            # Measure pre-reduction shortest vector
+            pre_norms = np.linalg.norm(pub, axis=1)
+            pre_shortest = np.min(pre_norms)
+            print(f"   Pre-LLL shortest:  {pre_shortest:.2f}")
+
+            # Run LLL
+            t0 = time.time()
+            reduced = lll_reduce(pub, delta=0.75)
+            lll_time = time.time() - t0
+
+            # Post-reduction metrics
+            post_norms = np.linalg.norm(reduced, axis=1)
+            post_shortest = np.min(post_norms)
+            post_avg = np.mean(post_norms)
+
+            # Hermite factors
+            improvement_ratio = pre_shortest / post_shortest
+            hf = hermite_factor(reduced)
+            rhf = root_hermite_factor(reduced)
+            cost = estimate_attack_cost(dim, rhf)
+
+            print(f"   Post-LLL shortest: {post_shortest:.2f}")
+            print(f"   Improvement:       {improvement_ratio:.2f}x")
+            print(f"   Hermite factor:    {hf:.4f}")
+            print(f"   Root Hermite:      {rhf:.6f}")
+            print(f"   LLL time:          {lll_time:.3f}s")
+            print(f"   Security estimate: {cost['interpretation']}")
+
+            if cost['interpretation'] == 'VULNERABLE':
+                print("   ⚠️  WARNING: LLL finds short vectors in public basis!")
+                if improvement_ratio < 2.0:
+                    print("        CRITICAL: First vector was ALREADY shortest — secret basis")
+                    print("        vectors are lattice vectors. GGH structure is broken at this dimension.")
+                else:
+                    print("        Private key structure may be recoverable at this dimension.")
+
+            results[N] = {
+                'dimension': dim,
+                'pre_shortest': float(pre_shortest),
+                'post_shortest': float(post_shortest),
+                'improvement': float(improvement_ratio),
+                'hermite_factor': float(hf),
+                'root_hermite_factor': float(rhf),
+                'lll_time_seconds': float(lll_time),
+                'security_estimate': cost
+            }
+
+        except Exception as e:
+            print(f"   ❌ FAILED: {e}")
+            results[N] = {'error': str(e)}
+
+    # Summary
+    print("\n" + "=" * 70)
+    print("📊 SECURITY SUMMARY")
+    print("=" * 70)
+    print(f"{'N':>3} {'Dim':>5} {'RHF':>10} {'Status':>12} {'LLL Time':>10}")
+    print("-" * 45)
+    for N, res in results.items():
+        if 'error' in res:
+            print(f"{N:>3} {'ERR':>5} {'---':>10} {'ERROR':>12} {'---':>10}")
+        else:
+            status = res['security_estimate']['interpretation']
+            print(f"{N:>3} {res['dimension']:>5} {res['root_hermite_factor']:>10.6f} {status:>12} {res['lll_time_seconds']:>10.3f}s")
+
+    print("\nInterpretation:")
+    print("  RHF < 1.01 → VULNERABLE: LLL finds very short vectors, private key at risk")
+    print("  RHF < 1.02 → MODERATE: Some structure leaked, needs BKZ for full break")
+    print("  RHF > 1.02 → STRONG: LLL insufficient, higher block size BKZ needed")
+    print("\nNote: These are heuristic estimates. Formal cryptanalysis required.")
+
+    return results
+
+
+# =============================================================================
 # SELF-TEST SUITE
 # =============================================================================
 
@@ -569,5 +852,13 @@ def run_self_tests():
 
 
 if __name__ == "__main__":
-    exit_code = run_self_tests()
-    sys.exit(exit_code)
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == '--analyze':
+        # Run lattice security analysis
+        N_vals = [4, 8, 16]
+        if len(sys.argv) > 2:
+            N_vals = [int(x) for x in sys.argv[2].split(',')]
+        run_lattice_security_analysis(N_values=N_vals)
+    else:
+        exit_code = run_self_tests()
+        sys.exit(exit_code)
