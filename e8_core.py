@@ -26,9 +26,9 @@ import time
 from typing import List, Tuple, Optional, Union
 
 __version__ = "2.0.0"
-__all__ = ['E8Lattice', 'E8Cipher', 'E8WeylTransform', 'generate_unimodular',
+__all__ = ['E8Lattice', 'E8Cipher', 'E8WeylTransform', 'E8MerkleHasher', 'generate_unimodular',
            'gram_schmidt', 'lll_reduce', 'hermite_factor', 'root_hermite_factor',
-           'estimate_attack_cost', 'run_lattice_security_analysis']
+           'estimate_attack_cost', 'run_lattice_security_analysis', 'run_hash_tests']
 
 # =============================================================================
 # CONSTANTS
@@ -123,7 +123,8 @@ class E8Lattice:
 
     def __init__(self, N: int = DEFAULT_N, scale: float = DEFAULT_SCALE,
                  public_basis: Optional[np.ndarray] = None,
-                 unimodular: Optional[np.ndarray] = None):
+                 unimodular: Optional[np.ndarray] = None,
+                 perturbation: Optional[np.ndarray] = None):
         """
         Initialize E8^N lattice.
 
@@ -132,6 +133,9 @@ class E8Lattice:
             scale: Lattice spacing S
             public_basis: Pre-computed public basis (optional)
             unimodular: Pre-computed unimodular matrix (optional)
+            perturbation: Small random perturbation matrix added to good_basis
+                          before unimodular transform. Prevents secret basis
+                          vectors from appearing verbatim in public basis.
         """
         self.N = N
         self.dim = 8 * N
@@ -153,10 +157,48 @@ class E8Lattice:
         if public_basis is not None:
             self.public_basis = public_basis.astype(np.float64)
             self.unimodular = unimodular.astype(np.float64) if unimodular is not None else None
+            self.perturbation = perturbation.astype(np.float64) if perturbation is not None else None
+            if perturbation is not None:
+                self.perturbed_good = self.good_basis + self.perturbation
+            else:
+                # Reconstruct perturbed_good from public basis if unimodular is known
+                if unimodular is not None:
+                    try:
+                        u_inv = np.linalg.inv(unimodular.astype(np.float64))
+                        self.perturbed_good = u_inv @ self.public_basis
+                    except np.linalg.LinAlgError:
+                        self.perturbed_good = np.linalg.pinv(unimodular.astype(np.float64)) @ self.public_basis
+                else:
+                    self.perturbed_good = self.good_basis.copy()
+            try:
+                self.perturbed_inverse = np.linalg.inv(self.perturbed_good)
+            except np.linalg.LinAlgError:
+                self.perturbed_inverse = np.linalg.pinv(self.perturbed_good)
         else:
             # Generate random unimodular transformation
             self.unimodular = generate_unimodular(self.dim, operations=200, max_multiplier=5)
-            self.public_basis = self.unimodular @ self.good_basis
+
+            # Add small perturbation to good basis before transform
+            # This prevents the secret basis vectors from appearing verbatim
+            # in the public basis, resisting trivial LLL attacks.
+            if perturbation is not None:
+                self.perturbation = perturbation.astype(np.float64)
+                perturbed_good = self.good_basis + self.perturbation
+            else:
+                # Generate a small dense perturbation (~1% of scale)
+                np.random.seed(42)  # Deterministic for reproducibility
+                self.perturbation = np.random.normal(0, scale * 0.01, (self.dim, self.dim))
+                self.perturbed_good = self.good_basis + self.perturbation
+                self.public_basis = self.unimodular @ self.perturbed_good
+
+                # Pre-compute inverse of perturbed_good for Babai decoding
+                # Since perturbed_good is block-diagonal + small dense noise,
+                # we compute its inverse numerically.
+                try:
+                    self.perturbed_inverse = np.linalg.inv(self.perturbed_good)
+                except np.linalg.LinAlgError:
+                    # Fallback to pseudo-inverse if singular
+                    self.perturbed_inverse = np.linalg.pinv(self.perturbed_good)
 
         # Compute min Gram-Schmidt length (for decoding radius)
         # For our orthogonal block-diagonal basis, all GS vectors have length scale * sqrt(2)
@@ -164,30 +206,27 @@ class E8Lattice:
 
     def babai_nearest_plane(self, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Babai's nearest plane algorithm for our orthogonal block-diagonal basis.
+        Babai's nearest plane algorithm using the perturbed good basis.
 
-        Since the good basis is block-orthogonal, this reduces to:
-        1. Extract coordinates in each block using the inverse basis
-        2. Round coordinates to nearest integers
-        3. Reconstruct lattice point
+        Since the public basis is U @ (good_basis + perturbation),
+        lattice points live in the perturbed_good space, not the pure
+        good_basis space. We decode using perturbed_inverse.
 
         Args:
             target: Point in R^dim
 
         Returns:
-            lattice_point: Nearest lattice point
-            coefficients: Integer coefficients in good basis
+            lattice_point: Nearest lattice point in perturbed_good space
+            coefficients: Integer coefficients
         """
         target = target.astype(np.float64)
 
-        # Extract raw coefficients: target @ basis_inverse
-        # Since basis_inverse is the right inverse of good_basis (for row-convention),
-        # we use matrix multiplication directly, NOT transposed.
-        coeffs_raw = target @ self.basis_inverse
+        # Use perturbed basis inverse for decoding
+        coeffs_raw = target @ self.perturbed_inverse
         coeffs = np.rint(coeffs_raw).astype(np.int64)
 
-        # Reconstruct lattice point: coeffs @ good_basis
-        lattice_point = coeffs.astype(np.float64) @ self.good_basis
+        # Reconstruct using perturbed good basis
+        lattice_point = coeffs.astype(np.float64) @ self.perturbed_good
 
         return lattice_point, coeffs
 
@@ -257,7 +296,8 @@ class E8Cipher:
     """
 
     def __init__(self, private_seed: Optional[bytes] = None,
-                 N: int = DEFAULT_N, scale: float = DEFAULT_SCALE):
+                 N: int = DEFAULT_N, scale: float = DEFAULT_SCALE,
+                 perturbation: Optional[np.ndarray] = None):
         """
         Initialize cipher.
 
@@ -265,6 +305,7 @@ class E8Cipher:
             private_seed: Seed for deterministic key generation
             N: Number of E8 blocks
             scale: Lattice spacing
+            perturbation: Optional custom perturbation matrix for public basis hardening
         """
         self.N = N
         self.dim = 8 * N
@@ -280,7 +321,7 @@ class E8Cipher:
 
         # Generate lattice with deterministic unimodular transform
         uni = generate_unimodular(self.dim, operations=200, max_multiplier=5, seed=seed_int)
-        self.lattice = E8Lattice(N=N, scale=scale, unimodular=uni)
+        self.lattice = E8Lattice(N=N, scale=scale, unimodular=uni, perturbation=perturbation)
 
     def encrypt(self, plaintext: bytes) -> dict:
         """
@@ -379,6 +420,7 @@ class E8Cipher:
             'private_seed': self.private_seed.hex(),
             'good_basis': self.lattice.good_basis.tolist(),
             'unimodular': self.lattice.unimodular.tolist() if self.lattice.unimodular is not None else None,
+            'perturbation': self.lattice.perturbation.tolist() if self.lattice.perturbation is not None else None,
             'N': self.N,
             'scale': self.lattice.scale
         }
@@ -407,6 +449,173 @@ class E8WeylTransform:
             result = self.lattice.weyl_reflection(result, root_idx)
 
         return hashlib.sha256(result.tobytes()).digest()
+
+
+class E8MerkleHasher:
+    """
+    Merkle-Damgård hash function using E8 Weyl symmetries as the compression function.
+
+    Architecture:
+    - Block size: 32 bytes (SHA256 output size)
+    - IV: Deterministic E8 point derived from "E8-Merkle-IV" seed
+    - Compression: state = WeylTransform(state XOR block, seed=block_hash)
+    - Finalization: SHA256 of final state
+
+    This provides a custom hash primitive with mathematical structure from E8
+    while remaining deterministic and fast.
+    """
+
+    BLOCK_SIZE = 32
+
+    def __init__(self, N: int = DEFAULT_N):
+        self.weyl = E8WeylTransform(N=N)
+        # Deterministic IV: hash a fixed string to an E8 point, then hash again
+        iv_point = self.weyl.lattice.hash_to_point(b"E8-Merkle-IV-v1")
+        self.iv = hashlib.sha256(iv_point.tobytes()).digest()
+
+    def _compress(self, state: bytes, block: bytes) -> bytes:
+        """
+        Compression function: mix state and block via E8 Weyl transform.
+
+        Args:
+            state: Current hash state (32 bytes)
+            block: Message block (32 bytes)
+
+        Returns:
+            bytes: New state (32 bytes)
+        """
+        # XOR state and block for diffusion
+        mixed = bytes(a ^ b for a, b in zip(state, block))
+
+        # Use block hash as Weyl transformation seed for determinism
+        block_seed = int.from_bytes(hashlib.sha256(block).digest()[:4], 'big') % (2**32)
+
+        # Apply E8 Weyl transformation to mixed state
+        transformed = self.weyl.transform(mixed, seed=block_seed)
+
+        # Fold back to 32 bytes via SHA256
+        return hashlib.sha256(transformed + state + block).digest()
+
+    def hash(self, message: bytes) -> bytes:
+        """
+        Compute Merkle-Damgård hash of message using E8 compression.
+
+        Args:
+            message: Arbitrary bytes to hash
+
+        Returns:
+            bytes: 32-byte hash digest
+        """
+        # Pad message to multiple of block size (simple padding: 0x80 + length)
+        msg_len = len(message)
+        padding = b'\x80' + b'\x00' * ((self.BLOCK_SIZE - (msg_len + 1) % self.BLOCK_SIZE) % self.BLOCK_SIZE)
+        padded = message + padding + struct.pack('>Q', msg_len * 8)
+
+        # Process blocks
+        state = self.iv
+        for i in range(0, len(padded), self.BLOCK_SIZE):
+            block = padded[i:i+self.BLOCK_SIZE]
+            state = self._compress(state, block)
+
+        return state
+
+    def hash_hex(self, message: bytes) -> str:
+        """Return hash as hex string."""
+        return self.hash(message).hex()
+
+
+def run_hash_tests():
+    """Run self-tests for E8 Merkle-Damgård hash."""
+    print("=" * 70)
+    print("🧪 E8-Merkle Hash Self-Test Suite")
+    print("=" * 70)
+
+    hasher = E8MerkleHasher(N=4)
+    tests_passed = 0
+    tests_failed = 0
+
+    # Test 1: Determinism
+    print("\n1️⃣ Testing Hash Determinism...")
+    try:
+        h1 = hasher.hash(b"test message")
+        h2 = hasher.hash(b"test message")
+        assert h1 == h2, "Hash not deterministic!"
+        print(f"   ✅ Deterministic: {h1.hex()[:40]}...")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
+    # Test 2: Avalanche effect (small change = large output change)
+    print("\n2️⃣ Testing Avalanche Effect...")
+    try:
+        h1 = hasher.hash(b"hello")
+        h2 = hasher.hash(b"Hello")
+        h3 = hasher.hash(b"hellp")
+        diff_1_2 = sum(bin(a ^ b).count('1') for a, b in zip(h1, h2))
+        diff_1_3 = sum(bin(a ^ b).count('1') for a, b in zip(h1, h3))
+        # Expect ~50% bit difference
+        assert 60 < diff_1_2 < 196, f"Avalanche too weak: {diff_1_2}/256 bits"
+        assert 60 < diff_1_3 < 196, f"Avalanche too weak: {diff_1_3}/256 bits"
+        print(f"   ✅ hello vs Hello: {diff_1_2}/256 bits differ")
+        print(f"   ✅ hello vs hellp: {diff_1_3}/256 bits differ")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
+    # Test 3: Empty message
+    print("\n3️⃣ Testing Empty Message...")
+    try:
+        h = hasher.hash(b"")
+        assert len(h) == 32
+        print(f"   ✅ Empty hash: {h.hex()[:40]}...")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
+    # Test 4: Large message
+    print("\n4️⃣ Testing Large Message (1 MB)...")
+    try:
+        big = b"x" * (1024 * 1024)
+        h = hasher.hash(big)
+        assert len(h) == 32
+        print(f"   ✅ 1MB hash: {h.hex()[:40]}...")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
+    # Test 5: Different N values produce different hashes
+    print("\n5️⃣ Testing Dimension Sensitivity...")
+    try:
+        h4 = E8MerkleHasher(N=4).hash(b"dimension test")
+        h8 = E8MerkleHasher(N=8).hash(b"dimension test")
+        assert h4 != h8, "Different N should produce different hashes"
+        print(f"   ✅ N=4 vs N=8 produce different hashes")
+        tests_passed += 1
+    except Exception as e:
+        print(f"   ❌ FAILED: {e}")
+        tests_failed += 1
+
+    # Summary
+    print()
+    print("=" * 70)
+    print("📊 HASH TEST SUMMARY")
+    print("=" * 70)
+    print(f"   ✅ Passed: {tests_passed}")
+    print(f"   ❌ Failed: {tests_failed}")
+    print(f"   📈 Success Rate: {tests_passed}/{tests_passed + tests_failed}")
+
+    if tests_failed == 0:
+        print("\n🎉 ALL HASH TESTS PASSED!")
+        print("=" * 70)
+        return 0
+    else:
+        print(f"\n⚠️ {tests_failed} test(s) failed")
+        print("=" * 70)
+        return 1
 
 
 # =============================================================================
@@ -735,16 +944,16 @@ def run_self_tests():
     print("\n3️⃣ Testing Babai Nearest Plane...")
     try:
         lat = E8Lattice(N=4, scale=DEFAULT_SCALE)
-        # Create a known lattice point plus small perturbation
+        # Create a known lattice point using PERTURBED good basis plus small noise
         true_coeffs = np.array([1, -2, 3, 0] * 8, dtype=np.int64)
-        lattice_pt = true_coeffs.astype(np.float64) @ lat.good_basis
+        lattice_pt = true_coeffs.astype(np.float64) @ lat.perturbed_good
         noise = np.random.normal(0, 0.01, lat.dim)
         target = lattice_pt + noise
 
         recovered_pt, recovered_coeffs = lat.babai_nearest_plane(target)
         assert np.allclose(recovered_coeffs, true_coeffs), "Babai recovered wrong coeffs!"
         assert np.allclose(recovered_pt, lattice_pt), "Babai recovered wrong point!"
-        print("   ✅ Babai correctly recovered lattice point")
+        print("   ✅ Babai correctly recovered perturbed lattice point")
         tests_passed += 1
     except Exception as e:
         print(f"   ❌ FAILED: {e}")
@@ -854,11 +1063,12 @@ def run_self_tests():
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == '--analyze':
-        # Run lattice security analysis
         N_vals = [4, 8, 16]
         if len(sys.argv) > 2:
             N_vals = [int(x) for x in sys.argv[2].split(',')]
         run_lattice_security_analysis(N_values=N_vals)
+    elif len(sys.argv) > 1 and sys.argv[1] == '--hash-tests':
+        run_hash_tests()
     else:
         exit_code = run_self_tests()
         sys.exit(exit_code)
