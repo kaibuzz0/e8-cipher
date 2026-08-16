@@ -14,26 +14,36 @@
   <span class="badge">RESEARCH ONLY · NOT PRODUCTION CRYPTO</span>
 
   <div class="grid">
-    <section class="card"><div class="small">Current gate</div><div class="metric warn">Gate 2</div><div>Threat model & construction choice</div></section>
+    <section class="card"><div class="small">Current gate</div><div class="metric warn">Gate 2</div><div>Hardness coverage & construction choice</div></section>
     <section class="card"><div class="small">Verified root count</div><div class="metric good">240</div><div>112 integer + 128 half-integer roots</div></section>
     <section class="card"><div class="small">CI matrix</div><div class="metric good">4/4</div><div>Python 3.10–3.13 passed research verification</div></section>
-    <section class="card"><div class="small">E8 basis covolume</div><div class="metric good">1</div><div>Exact determinant-1 reference basis</div></section>
+    <section class="card"><div class="small">E8 error law</div><div class="metric warn">Defined</div><div>Hardness coverage remains conditional</div></section>
   </div>
 
-  <div class="claim"><strong>Current conclusion:</strong> the legacy v2 cipher is a documented broken-design specimen, not a secure encryption protocol. Gate 0 mathematics is verified; the project is now defining the threat model and deciding whether E8 belongs in any defensible successor construction.</div>
+  <div class="claim"><strong>Current conclusion:</strong> the legacy v2 cipher is a documented broken-design specimen. A precise bounded E8 block error law is now defined, but no successor protocol or inherited Module-LWE security claim is accepted until the quantitative hypotheses of the relevant hardness theorem are checked.</div>
+
+  <h2>Gate 2 result — exact E8 error distribution</h2>
+  <div class="grid">
+    <section class="card"><strong>Probability law</strong><p class="small">One block is a truncated discrete Gaussian on genuine E8: probability is proportional to exp(-π||x||²/s²) for E8 points inside radius R, and zero outside.</p></section>
+    <section class="card"><strong>Dependence</strong><p class="small">Blocks are iid by definition. Coordinates inside each 8D block are dependent even though E8 symmetry makes the covariance isotropic.</p></section>
+    <section class="card"><strong>Modular representation</strong><p class="small">Research arithmetic uses Y=2X so half-integer E8 points become integral. This is the scaled lattice 2E8 and the factor-of-two must remain explicit in variance/noise comparisons.</p></section>
+    <section class="card"><strong>Hardness status</strong><p class="small">Classic Gaussian LWE/Module-LWE reductions are not direct coverage. A PKC 2026 theorem for bounded general M-LWE errors is potentially relevant, but its entropy, support, sample, dimension, and embedding hypotheses are not yet verified for E8.</p></section>
+  </div>
+
+  <div class="claim"><strong>Conditional opportunity:</strong> the 2026 general-distribution M-LWE result may be broad enough to cover a bounded E8 error family. The repository therefore records neither “secure” nor “impossible.” The next pass must turn the theorem into a parameter-by-parameter PASS/FAIL worksheet before any KEM algorithms are designed.</div>
 
   <h2>Verified negative results from legacy v2</h2>
   <div class="failure"><strong>Cross-key isolation fails.</strong> Unrelated keys share the effective decoding basis, and one unrelated key can decrypt another key's ciphertext in the regression suite.</div>
   <div class="failure"><strong>Encryption randomness is reused.</strong> Repeated encryption restarts the same secret-derived PRNG stream, producing identical masks/noise and deterministic ciphertext for the same message.</div>
   <div class="failure"><strong>Ciphertext subtraction leaks message differences.</strong> Equal-length ciphertexts cancel the reused lattice term and Gaussian noise.</div>
   <div class="failure"><strong>The legacy nonce is not a nonce.</strong> It is a constant prefix derived from private seed material.</div>
-  <p class="small">These failures are preserved as tests so future work cannot confuse successful round-trip decryption with security. The public compatibility wrapper now emits a visible security warning when instantiated.</p>
+  <p class="small">These failures are preserved as tests so future work cannot confuse successful round-trip decryption with security. The public compatibility wrapper emits a visible security warning when instantiated.</p>
 
   <h2>Research gates</h2>
   <div class="gate done"><span class="dot"></span><div><strong>Gate 0 — Genuine E8 mathematics</strong><br><span class="small">Complete: 240 roots, exact determinant/Gram checks, full Weyl root closure, and E8^N direct-sum invariants verified.</span></div></div>
   <div class="gate done"><span class="dot"></span><div><strong>Gate 1 — Legacy failure containment</strong><br><span class="small">Captured catastrophic v2 flaws as regression evidence and marked the compatibility API insecure.</span></div></div>
-  <div class="gate active"><span class="dot"></span><div><strong>Gate 2 — Threat model & construction</strong><br><span class="small">Specify security goals and decide where E8 belongs: trapdoor, LWE/Module-LWE geometry, coding layer, or nowhere.</span></div></div>
-  <div class="gate"><span class="dot"></span><div><strong>Gate 3 — Reference implementation</strong><br><span class="small">Only after Gate 2: build a candidate protocol with CSPRNG randomness, strict serialization, and deterministic test vectors.</span></div></div>
+  <div class="gate active"><span class="dot"></span><div><strong>Gate 2 — Threat model & construction</strong><br><span class="small">Threat model and E8 error law are defined. Active work is verifying whether published M-LWE hardness results actually cover useful E8 parameters.</span></div></div>
+  <div class="gate"><span class="dot"></span><div><strong>Gate 3 — Reference implementation</strong><br><span class="small">Blocked until Gate 2: only then build a candidate protocol with CSPRNG randomness, strict serialization, and deterministic test vectors.</span></div></div>
   <div class="gate"><span class="dot"></span><div><strong>Gate 4 — Adversarial verification</strong><br><span class="small">Known-plaintext, cross-key, randomness-reuse, lattice-reduction, fuzzing, and statistical attacks.</span></div></div>
   <div class="gate"><span class="dot"></span><div><strong>Gate 5 — Review readiness</strong><br><span class="small">Formal specification, concrete attack estimates, benchmarks, side-channel analysis, and independent review.</span></div></div>
 
@@ -45,7 +55,7 @@
   </div>
 
   <h2>Repository map</h2>
-  <p><code>research/e8_lattice.py</code> contains the verified E8 substrate. <code>tests/test_e8_lattice.py</code> checks mathematical invariants. <code>tests/test_legacy_failures.py</code> preserves verified v2 failures. <code>RESEARCH_PLAN.md</code> is the pass-to-pass research gate checklist. Legacy <code>e8_core.py</code> and <code>e8_cipher.py</code> remain only for historical reproduction and regression evidence.</p>
+  <p><code>research/e8_lattice.py</code> contains the verified E8 substrate. <code>research/E8_ERROR_DISTRIBUTION.md</code> defines the exact candidate error PMF, tails, covariance, dependence, entropy, and modular representation. <code>research/E8_HARDNESS_COVERAGE.md</code> records theorem coverage status. <code>tests/test_legacy_failures.py</code> preserves verified v2 failures. <code>RESEARCH_PLAN.md</code> is the pass-to-pass research gate checklist.</p>
 
   <p><a href="https://github.com/kaibuzz0/e8-cipher">Open the repository on GitHub →</a></p>
   <footer>Every claim on this page should point to a reproducible test, benchmark, proof sketch, or documented negative result in the repository. No successor protocol is considered secure merely because it encrypts and decrypts successfully.</footer>
