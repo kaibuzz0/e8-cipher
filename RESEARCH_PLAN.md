@@ -25,9 +25,9 @@ This repository is **research software, not production cryptography** until a co
 - [x] Verify every root has squared norm 2.
 - [x] Verify all generated roots satisfy E8 lattice membership rules.
 - [x] Verify lattice covolume / Gram determinant is 1.
-- [ ] Add exact/rational verification to remove dependence on float tolerances.
-- [ ] Add E8 Weyl reflections over the full 240-root system.
-- [ ] Verify reflections preserve root membership and norms.
+- [x] Add exact/rational verification to remove dependence on float tolerances.
+- [x] Add E8 Weyl reflections over the full 240-root system.
+- [x] Verify reflections preserve root membership and norms.
 - [ ] Add E8^N direct-sum construction with explicit invariants.
 
 **Exit criterion:** mathematical tests demonstrate that all objects labeled E8 are actually E8-derived.
@@ -99,6 +99,10 @@ Each research pass should:
 5. Record evidence in code, tests, or `docs/` rather than only in prose comments.
 6. Update checkboxes only when the claimed verification actually exists.
 7. Leave the next highest-priority item obvious to the following pass.
+
+## Current handoff
+
+Gate 0 exact arithmetic and full Weyl-root closure are verified. The next highest-priority item is the E8^N direct-sum construction with explicit invariants; after that, Gate 0 can be closed and work should move to legacy-break regression tests.
 
 ## Website
 
