@@ -54,9 +54,10 @@ Verified legacy failures:
 
 - [x] Define attacker capabilities and target security properties (IND-CPA / IND-CCA / KEM security). See `research/THREAT_MODEL.md`; the primary target is an IND-CCA-secure KEM with explicit cross-key isolation, fresh CSPRNG randomness, strict decoding, and adversarial capabilities.
 - [x] Decide whether the E8 contribution belongs in a GGH-like trapdoor, LWE/Module-LWE error geometry, coding layer, or another primitive. Decision in `research/E8_LWE_FEASIBILITY.md`: reject GGH as the successor direction; investigate E8-shaped LWE/Module-LWE error geometry first, with coding/reconciliation as the fallback if no credible hardness connection exists.
+- [x] Define an exact candidate E8 block error law. `research/E8_ERROR_DISTRIBUTION.md` specifies a truncated E8 discrete Gaussian with explicit PMF, cutoff/tails, covariance, block dependence/independence, min-entropy quantity, and scaled-integer modular representation.
 - [ ] Reject any design whose secret is reconstructable from public parameters.
 - [ ] Write the exact algorithms for KeyGen, Encaps/Encrypt, Decaps/Decrypt before implementation.
-- [ ] Identify the standard hardness assumption to which security should reduce.
+- [ ] Identify the standard hardness assumption to which security should reduce. Current status in `research/E8_HARDNESS_COVERAGE.md`: classic Gaussian LWE/Module-LWE results are not direct coverage; PKC 2026 gives a potentially relevant bounded general-distribution M-LWE theorem, but its quantitative hypotheses have not yet been verified for an E8 parameter tuple/embedding.
 
 **Exit criterion:** a written construction exists that can be attacked and reviewed independently of code.
 
@@ -110,7 +111,7 @@ Each research pass should:
 
 ## Current handoff
 
-Gates 0 and 1 are verified. Gate 2 now has a formal KEM threat model and a documented construction-family decision: investigate E8-shaped LWE/Module-LWE error geometry, but do not claim that it inherits ML-KEM security. The next highest-priority task is to define the exact E8 block error probability distribution and determine whether a published LWE/Module-LWE hardness result actually covers it. Do not implement a successor KEM until that distribution, the hardness connection, and exact KeyGen/Encaps/Decaps algorithms are resolved on paper.
+Gates 0 and 1 are verified. Gate 2 now has a formal KEM threat model, a documented construction-family decision, and an exact bounded E8 block error distribution. Literature review found a potentially relevant 2026 result for M-LWE with arbitrary bounded distributions of sufficient entropy, but repository coverage is **not established**. The next highest-priority task is to extract the exact quantitative hypotheses of Boudgoust–Jeudy–Tairi–Wen (PKC 2026) into a parameter-check worksheet and evaluate explicit `(s,R,q,n,k,m)` research tuples for entropy, support/norm, dimensions, sample count, and embedding compatibility. Do not write successor KeyGen/Encaps/Decaps algorithms until at least one useful tuple passes without an unproved embedding step.
 
 ## Website
 
