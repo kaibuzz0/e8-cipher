@@ -34,9 +34,9 @@ This repository is **research software, not production cryptography** until a co
 
 ### Gate 1 — Legacy cipher containment
 
-- [x] Add regression test proving the old fixed decoding basis can be reconstructed/shared across unrelated keys. Verified in CI run #19.
-- [x] Add regression test proving the old encrypt() reuses its RNG stream. Verified in CI run #19, including identical-ciphertext reuse and ciphertext-difference cancellation.
-- [x] Mark legacy cipher API as insecure/deprecated in runtime and docs. The public compatibility wrapper now emits `LegacyCipherSecurityWarning`; dashboard documentation labels v2 as a broken-design specimen.
+- [x] Add regression test proving the old fixed decoding basis can be reconstructed/shared across unrelated keys. Verified in CI.
+- [x] Add regression test proving the old encrypt() reuses its RNG stream. Verified in CI, including identical-ciphertext reuse and ciphertext-difference cancellation.
+- [x] Mark legacy cipher API as insecure/deprecated in runtime and docs. The public compatibility wrapper emits `LegacyCipherSecurityWarning`; dashboard documentation labels v2 as a broken-design specimen.
 - [x] Remove private-seed-derived pseudo-nonce from any successor design. No successor protocol exists yet; the design rules explicitly prohibit secret-derived randomness/nonces, while the legacy pseudo-nonce remains only as captured failure evidence.
 - [x] Decide whether legacy code remains only as a documented broken-design specimen. Decision: retain it for reproducibility and adversarial regression tests, never as a candidate protocol.
 
@@ -45,14 +45,15 @@ Verified legacy failures:
 - unrelated private keys share the effective decoding basis and can cross-decrypt ciphertext;
 - repeated encryption restarts the same RNG stream;
 - subtracting equal-length ciphertexts cancels the reused lattice mask/noise and exposes plaintext differences;
-- the legacy `nonce` is a constant prefix derived from private seed material.
+- the legacy `nonce` is a constant prefix derived from private seed material;
+- constructing the public compatibility API emits a visible security warning.
 
-**Exit criterion:** known catastrophic failures are captured as tests and cannot silently re-enter a successor design. The runtime-warning addition must pass the current multi-version CI before Gate 1 is considered fully closed operationally.
+**Exit criterion met operationally:** the legacy containment suite passed across Python 3.10, 3.11, 3.12, and 3.13; JUnit diagnostics were uploaded for every matrix leg.
 
 ### Gate 2 — Threat model and construction choice
 
 - [x] Define attacker capabilities and target security properties (IND-CPA / IND-CCA / KEM security). See `research/THREAT_MODEL.md`; the primary target is an IND-CCA-secure KEM with explicit cross-key isolation, fresh CSPRNG randomness, strict decoding, and adversarial capabilities.
-- [ ] Decide whether the E8 contribution belongs in a GGH-like trapdoor, LWE/Module-LWE error geometry, coding layer, or another primitive. Current disposition: reject GGH-style successor; investigate E8-shaped LWE/Module-LWE error geometry first, with coding/reconciliation as the safer fallback.
+- [x] Decide whether the E8 contribution belongs in a GGH-like trapdoor, LWE/Module-LWE error geometry, coding layer, or another primitive. Decision in `research/E8_LWE_FEASIBILITY.md`: reject GGH as the successor direction; investigate E8-shaped LWE/Module-LWE error geometry first, with coding/reconciliation as the fallback if no credible hardness connection exists.
 - [ ] Reject any design whose secret is reconstructable from public parameters.
 - [ ] Write the exact algorithms for KeyGen, Encaps/Encrypt, Decaps/Decrypt before implementation.
 - [ ] Identify the standard hardness assumption to which security should reduce.
@@ -109,7 +110,7 @@ Each research pass should:
 
 ## Current handoff
 
-Gate 0 passed the Python 3.10–3.13 matrix. Gate 1 failures are captured, and the public legacy wrapper now carries an explicit runtime security warning pending confirmation on the latest CI head. Gate 2 now has a written threat model grounded against the modern KEM/Module-LWE baseline. The next highest-priority research question is whether an exact E8-shaped error distribution can be covered by a credible LWE/Module-LWE hardness result; do not implement a successor KEM until that question and the exact KeyGen/Encaps/Decaps algorithms are resolved on paper.
+Gates 0 and 1 are verified. Gate 2 now has a formal KEM threat model and a documented construction-family decision: investigate E8-shaped LWE/Module-LWE error geometry, but do not claim that it inherits ML-KEM security. The next highest-priority task is to define the exact E8 block error probability distribution and determine whether a published LWE/Module-LWE hardness result actually covers it. Do not implement a successor KEM until that distribution, the hardness connection, and exact KeyGen/Encaps/Decaps algorithms are resolved on paper.
 
 ## Website
 
