@@ -23,11 +23,21 @@ This worksheet deliberately distinguishes three statuses:
 
 `UNRESOLVED` is not a soft pass.
 
+## Source-confidence levels
+
+- **Level A — theorem text:** exact theorem/lemma statement available and variable definitions visible.
+- **Level B — official publication summary/note:** author/publisher material states a property but omits the exact theorem equation.
+- **Level C — later primary-paper cross-reference:** another peer-reviewed/preprint research paper describes a condition of BJTW, useful for navigation but not sufficient to reconstruct omitted constants.
+
+Only Level A evidence can turn a BJTW quantitative cell into PASS or FAIL.
+
 ## Source-access result
 
-The official Springer PKC 2026 page confirms the published result and states that search M-LWE remains hard when the error vector follows an **arbitrary bounded distribution with sufficient entropy**, with a restriction on the number of samples. The same page exposes technical notes about norm balls and truncation, but the theorem body containing the quantitative hypotheses is subscription-gated in the accessible HTML. The open HAL record `lirmm-05396885v2` is protected by an anti-bot gate in this execution environment. The IACR full version is ePrint 2025/1472, but its PDF body was likewise not retrievable by the available web/PDF path during this pass.
+The official Springer PKC 2026 page confirms the published result and states that search M-LWE remains hard when the error vector follows an **arbitrary bounded distribution with sufficient entropy**, with a restriction on the number of samples. The same page exposes technical notes about norm balls and truncation, but the theorem body containing the quantitative hypotheses is subscription-gated in the accessible HTML. This is Level B evidence.
 
-A later primary research paper comparing its own leakage reduction with BJTW explicitly states that `[BJTW25, Theorem 4.1]` additionally requires a rank-`(m-n)` SIS problem to be sufficiently hard and therefore imposes a lower bound on the number of samples `m`. This is useful structural evidence, but it is **not a substitute for the BJTW theorem body** and does not justify inventing the omitted SIS norm parameter, entropy threshold, or constants.
+The open HAL record `lirmm-05396885v2` is protected by an anti-bot gate in this execution environment. The IACR full version is ePrint 2025/1472, but its PDF body was likewise not retrievable by the available web/PDF path during this pass.
+
+A later primary research paper comparing its own leakage reduction with BJTW states that `[BJTW25, Theorem 4.1]` additionally requires a rank-`(m-n)` SIS problem to be sufficiently hard and therefore imposes a lower bound on the number of samples `m`. This is Level C structural evidence, **not a substitute for the BJTW theorem body**, and does not justify inventing the omitted SIS norm parameter, entropy threshold, or constants.
 
 Therefore this document records the exact equations we can derive for the E8 candidate and the exact qualitative hypotheses visible from the publication, while marking the unavailable quantitative BJTW inequalities as `UNRESOLVED`.
 
@@ -81,18 +91,18 @@ This is a serialization/embedding sanity check, not a hardness condition from BJ
 
 ## BJTW hypothesis ledger
 
-| ID | Hypothesis / proof obligation | Equation or condition currently justified | Status |
-|---|---|---|---|
-| H1 | Error distribution is bounded | `||X||_2 <= R`; equivalently `||Y||_2 <= 2R` | **PASS** for every finite `R` candidate |
-| H2 | Error distribution has sufficient entropy | Candidate value is `H_inf(E)=(mn/8) log2 Z_{s,R}` under iid coefficient blocks; BJTW's required lower bound is not available in the accessible theorem body | **UNRESOLVED** |
-| H3 | Number-of-samples restriction | Published abstract confirms a restriction on sample count; a later primary paper states BJTW Thm. 4.1 also requires hardness of rank-`(m-n)` SIS in its LWE notation | **UNRESOLVED** until BJTW notation is mapped exactly to module rank `k`, field degree `n`, and sample count `m` |
-| H4 | Auxiliary SIS hardness | Need exact BJTW SIS instance, rank/dimension, norm bound `beta`, modulus and advantage relation | **UNRESOLVED** |
-| H5 | Ring/number-field/module domain | Need exact theorem domain and whether an arbitrary distribution over coefficient embeddings is allowed | **UNRESOLVED** |
-| H6 | Public E8 block grouping is covered | Must prove that grouping eight coefficients into correlated E8 blocks is merely choosing an allowed arbitrary bounded distribution, not changing the M-LWE algebraic problem | **UNRESOLVED** |
-| H7 | Secret-law requirements | Error-only coverage does not automatically justify a future E8 secret; HNF/general secret-error theorem has separate conditions | **UNRESOLVED** |
-| H8 | Efficient sampling | The PMF is finite and explicit, but a verified sampler is not yet merged | **UNRESOLVED** operationally |
-| H9 | Centered modular embedding does not wrap | Sufficient check `4R < q` | evaluated per tuple below |
-| H10 | `n` aligns with 8-coordinate blocks | `8 | n` for simple coefficient-block partitioning | evaluated per tuple below |
+| ID | Hypothesis / proof obligation | Equation or condition currently justified | Evidence | Status |
+|---|---|---|---|---|
+| H1 | Error distribution is bounded | `||X||_2 <= R`; equivalently `||Y||_2 <= 2R`; official abstract requires a bounded distribution | candidate exact + Level B | **PASS** for every finite `R` candidate |
+| H2 | Error distribution has sufficient entropy | Candidate value is `H_inf(E)=(mn/8) log2 Z_{s,R}` under iid coefficient blocks; BJTW's required lower bound is not available | Level B only for “sufficient entropy” | **UNRESOLVED** |
+| H3 | Number-of-samples restriction | Official abstract confirms a restriction; later paper reports a rank-`(m-n)` SIS dependency in BJTW Thm. 4.1 | Level B/C | **UNRESOLVED** |
+| H4 | Auxiliary SIS hardness | Need exact BJTW SIS instance, rank/dimension, norm bound `beta`, modulus and advantage relation | Level C only | **UNRESOLVED** |
+| H5 | Ring/number-field/module domain | Need exact theorem domain and whether an arbitrary distribution over coefficient embeddings is allowed | no Level A statement retrieved | **UNRESOLVED** |
+| H6 | Public E8 block grouping is covered | Must prove grouping eight coefficients into correlated E8 blocks is merely choosing an allowed arbitrary bounded distribution | proof obligation | **UNRESOLVED** |
+| H7 | Secret-law requirements | Error-only coverage does not automatically justify a future E8 secret; HNF/general secret-error theorem has separate conditions | official summary only | **UNRESOLVED** |
+| H8 | Efficient sampling | The PMF is finite and explicit, but a verified sampler is not yet merged | repository state | **UNRESOLVED** operationally |
+| H9 | Centered modular embedding does not wrap | Sufficient check `4R < q` | candidate exact | evaluated per tuple below |
+| H10 | `n` aligns with 8-coordinate blocks | `8 | n` for simple coefficient-block partitioning | candidate exact | evaluated per tuple below |
 
 ## Explicit research tuples
 
@@ -165,7 +175,7 @@ If any indispensable condition is proven FAIL for all useful tuples, move E8 out
 Primary publication metadata and accessible claims:
 
 - Boudgoust, Jeudy, Tairi, Wen, *Hardness of M-LWE with General Distributions and Applications to Leaky Variants*, PKC 2026, LNCS 16551, pp. 3–37, DOI `10.1007/978-3-032-26731-3_1`; full version ePrint 2025/1472.
-- Official Springer preview: confirms arbitrary bounded errors with sufficient entropy and a sample-number restriction; its notes explicitly discuss integer points in norm balls and say a general distribution can be truncated to enforce a norm bound.
+- Official Springer preview: confirms arbitrary bounded errors with sufficient entropy and a sample-number restriction; its notes discuss integer points in norm balls and state that a distribution may be truncated to enforce the norm bound.
 - HAL/LIRMM record: `lirmm-05396885v2` (full-text link access-blocked in this execution environment).
 - A later primary research paper, *Leaky LWE: Learning with Errors with Semi-Adaptive Secret- and Error-Leakage*, identifies BJTW Theorem 4.1 as requiring hardness of a rank-`(m-n)` SIS problem in the LWE setting, which imposes a lower bound on `m`.
 
