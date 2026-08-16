@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>E8 Cipher Research Lab</title>
+  <style>
+    :root{color-scheme:dark;--bg:#081018;--panel:#101b27;--text:#e9f0f7;--muted:#9eb0c1;--line:#22364a;--good:#61d095;--warn:#f0c36a;--bad:#ff7b72;--accent:#78a9ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0,#12233a 0,#081018 42%);color:var(--text);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1080px;margin:auto;padding:42px 20px 70px}h1{font-size:clamp(2.4rem,7vw,5rem);line-height:.95;margin:8px 0 18px;letter-spacing:-.045em}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.78rem}.lede{max-width:760px;color:var(--muted);font-size:1.15rem}.badge{display:inline-block;border:1px solid var(--warn);color:var(--warn);padding:6px 10px;border-radius:999px;font-weight:700;font-size:.82rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:30px 0}.card{background:linear-gradient(180deg,#111f2d,#0d1722);border:1px solid var(--line);border-radius:16px;padding:20px}.metric{font-size:2rem;font-weight:800;margin:4px 0}.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}h2{margin-top:44px;font-size:1.6rem}.gate{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}.dot{width:12px;height:12px;border-radius:50%;margin-top:7px;background:var(--muted);flex:0 0 auto}.done .dot{background:var(--good)}.active .dot{background:var(--warn);box-shadow:0 0 18px var(--warn)}code{background:#07111c;border:1px solid var(--line);padding:2px 6px;border-radius:6px}a{color:var(--accent)}footer{margin-top:52px;color:var(--muted);font-size:.9rem}.claim{border-left:3px solid var(--warn);padding:10px 14px;background:#131b22}.small{color:var(--muted);font-size:.92rem}</style>
+</head>
+<body><main>
+  <div class="eyebrow">E8 Cipher Research Lab</div>
+  <h1>Build the math.<br>Attack the theory.</h1>
+  <p class="lede">A public research program testing whether genuine E8 lattice structure can contribute useful cryptographic properties to an encryption or key-encapsulation design. Positive and negative results are both part of the project.</p>
+  <span class="badge">RESEARCH ONLY · NOT PRODUCTION CRYPTO</span>
+
+  <div class="grid">
+    <section class="card"><div class="small">Current gate</div><div class="metric warn">Gate 0</div><div>Correct mathematical substrate</div></section>
+    <section class="card"><div class="small">Verified root count</div><div class="metric good">240</div><div>112 integer + 128 half-integer roots</div></section>
+    <section class="card"><div class="small">Root squared norm</div><div class="metric good">2</div><div>Verified for all generated roots</div></section>
+    <section class="card"><div class="small">E8 basis covolume</div><div class="metric good">1</div><div>Determinant-1 reference basis</div></section>
+  </div>
+
+  <div class="claim"><strong>Current conclusion:</strong> the legacy v2 cipher is not a secure encryption protocol. The project is rebuilding from verified E8 mathematics upward instead of treating round-trip tests as proof of security.</div>
+
+  <h2>Research gates</h2>
+  <div class="gate active"><span class="dot"></span><div><strong>Gate 0 — Genuine E8 mathematics</strong><br><span class="small">Construct and mechanically verify the root system, basis, Weyl operations, and E8^N invariants.</span></div></div>
+  <div class="gate"><span class="dot"></span><div><strong>Gate 1 — Legacy failure containment</strong><br><span class="small">Turn every known catastrophic v2 flaw into a regression test so it cannot return unnoticed.</span></div></div>
+  <div class="gate"><span class="dot"></span><div><strong>Gate 2 — Threat model & construction</strong><br><span class="small">Specify security goals and decide where E8 belongs: trapdoor, LWE/Module-LWE geometry, coding layer, or nowhere.</span></div></div>
+  <div class="gate"><span class="dot"></span><div><strong>Gate 3 — Reference implementation</strong><br><span class="small">Build a candidate protocol with CSPRNG randomness, strict serialization, and deterministic test vectors.</span></div></div>
+  <div class="gate"><span class="dot"></span><div><strong>Gate 4 — Adversarial verification</strong><br><span class="small">Known-plaintext, cross-key, randomness-reuse, lattice-reduction, fuzzing, and statistical attacks.</span></div></div>
+  <div class="gate"><span class="dot"></span><div><strong>Gate 5 — Review readiness</strong><br><span class="small">Formal specification, concrete attack estimates, benchmarks, side-channel analysis, and independent review.</span></div></div>
+
+  <h2>What changed first</h2>
+  <div class="grid">
+    <section class="card"><strong>True E8 roots</strong><p class="small">The earlier code used eight orthogonal directions while discussing 240 roots. The research module now constructs all 240 roots explicitly.</p></section>
+    <section class="card"><strong>Testable claims</strong><p class="small">Root count, uniqueness, norm, lattice membership, basis rank, determinant, and Gram determinant are encoded as tests.</p></section>
+    <section class="card"><strong>Security ≠ functionality</strong><p class="small">A successful encrypt/decrypt round trip is treated only as correctness. Security requires an attacker model and adversarial evidence.</p></section>
+  </div>
+
+  <h2>Repository map</h2>
+  <p><code>research/e8_lattice.py</code> contains the verified E8 substrate. <code>tests/</code> contains mathematical and, later, adversarial tests. <code>RESEARCH_PLAN.md</code> is the pass-to-pass handoff checklist. Legacy <code>e8_core.py</code> remains available as the historical v2 experiment while its failures are converted into regression tests.</p>
+
+  <p><a href="https://github.com/kaibuzz0/e8-cipher">Open the repository on GitHub →</a></p>
+  <footer>Every claim on this page should eventually point to a reproducible test, benchmark, proof sketch, or documented negative result in the repository.</footer>
+</main></body></html>
