@@ -55,9 +55,10 @@ Verified legacy failures:
 - [x] Define attacker capabilities and target security properties (IND-CPA / IND-CCA / KEM security). See `research/THREAT_MODEL.md`; the primary target is an IND-CCA-secure KEM with explicit cross-key isolation, fresh CSPRNG randomness, strict decoding, and adversarial capabilities.
 - [x] Decide whether the E8 contribution belongs in a GGH-like trapdoor, LWE/Module-LWE error geometry, coding layer, or another primitive. Decision in `research/E8_LWE_FEASIBILITY.md`: reject GGH as the successor direction; investigate E8-shaped LWE/Module-LWE error geometry first, with coding/reconciliation as the fallback if no credible hardness connection exists.
 - [x] Define an exact candidate E8 block error law. `research/E8_ERROR_DISTRIBUTION.md` specifies a truncated E8 discrete Gaussian with explicit PMF, cutoff/tails, covariance, block dependence/independence, min-entropy quantity, and scaled-integer modular representation.
+- [x] Build a PASS / FAIL / UNRESOLVED theorem-audit worksheet. `research/PKC2026_PARAMETER_WORKSHEET.md` computes explicit candidate support sizes, min-entropies, block counts, and modular-embedding checks for five `(s,R,q,n,k,m)` tuples. No tuple is marked theorem-PASS while the quantitative BJTW theorem body remains unavailable to the current retrieval path.
 - [ ] Reject any design whose secret is reconstructable from public parameters.
 - [ ] Write the exact algorithms for KeyGen, Encaps/Encrypt, Decaps/Decrypt before implementation.
-- [ ] Identify the standard hardness assumption to which security should reduce. Current status in `research/E8_HARDNESS_COVERAGE.md`: classic Gaussian LWE/Module-LWE results are not direct coverage; PKC 2026 gives a potentially relevant bounded general-distribution M-LWE theorem, but its quantitative hypotheses have not yet been verified for an E8 parameter tuple/embedding.
+- [ ] Identify the standard hardness assumption to which security should reduce. Current status: classic Gaussian LWE/Module-LWE results are not direct coverage; PKC 2026 is potentially relevant, but exact entropy/sample/SIS/domain inequalities and the E8 coefficient-block embedding obligation remain unresolved.
 
 **Exit criterion:** a written construction exists that can be attacked and reviewed independently of code.
 
@@ -111,7 +112,9 @@ Each research pass should:
 
 ## Current handoff
 
-Gates 0 and 1 are verified. Gate 2 now has a formal KEM threat model, a documented construction-family decision, and an exact bounded E8 block error distribution. Literature review found a potentially relevant 2026 result for M-LWE with arbitrary bounded distributions of sufficient entropy, but repository coverage is **not established**. The next highest-priority task is to extract the exact quantitative hypotheses of Boudgoust–Jeudy–Tairi–Wen (PKC 2026) into a parameter-check worksheet and evaluate explicit `(s,R,q,n,k,m)` research tuples for entropy, support/norm, dimensions, sample count, and embedding compatibility. Do not write successor KeyGen/Encaps/Decaps algorithms until at least one useful tuple passes without an unproved embedding step.
+Gates 0 and 1 are verified. Gate 2 now has a formal threat model, a construction-family decision, an exact E8 error law, and an explicit theorem-audit worksheet with five research tuples. Candidate-side boundedness, E8 support/min-entropy, coefficient-block counts, and centered modular embedding can be evaluated now; the decisive PKC 2026 quantitative entropy bound, sample-count restriction, auxiliary SIS parameters, module-domain mapping, and E8 block-grouping coverage remain **UNRESOLVED** because the accessible Springer page is a preview and the HAL manuscript is access-blocked in this environment.
+
+The next highest-priority task is to obtain the full BJTW theorem body from ePrint 2025/1472 / HAL / an author-provided full-text path, transcribe its exact variable definitions and inequalities into `research/PKC2026_PARAMETER_WORKSHEET.md`, and replace unresolved cells with calculations. If no useful tuple passes every indispensable condition, formally move E8 outside the secrecy assumption and start the reconciliation/coding track. Do not write successor KeyGen/Encaps/Decaps algorithms while theorem coverage is unresolved.
 
 ## Website
 
