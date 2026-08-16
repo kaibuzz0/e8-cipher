@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 from research.e8_lattice import (
+    E8DirectSum,
     E8_SIMPLE_ROOT_BASIS,
     E8_SIMPLE_ROOT_BASIS_SCALED2,
     e8_roots_scaled2,
@@ -82,6 +83,70 @@ class TestE8Mathematics(unittest.TestCase):
         self.assertTrue(report["gram_determinant_1_exact"])
         self.assertTrue(report["all_roots_are_lattice_vectors_exact"])
         self.assertTrue(report["weyl_root_closure_240x240"])
+
+
+class TestE8DirectSum(unittest.TestCase):
+    def test_direct_sum_rejects_invalid_copy_counts(self):
+        for value in (0, -1):
+            with self.assertRaises(ValueError):
+                E8DirectSum(value)
+
+    def test_direct_sum_dimensions_and_basis_shapes(self):
+        for copies in (1, 2, 4):
+            lattice = E8DirectSum(copies)
+            self.assertEqual(lattice.dimension, 8 * copies)
+            self.assertEqual(
+                lattice.basis_scaled2().shape,
+                (8 * copies, 8 * copies),
+            )
+
+    def test_direct_sum_basis_is_exactly_block_diagonal(self):
+        lattice = E8DirectSum(3)
+        basis = lattice.basis_scaled2()
+        zero = np.zeros((8, 8), dtype=np.int64)
+        for i in range(3):
+            for j in range(3):
+                block = basis[8*i:8*i+8, 8*j:8*j+8]
+                expected = E8_SIMPLE_ROOT_BASIS_SCALED2 if i == j else zero
+                self.assertTrue(np.array_equal(block, expected))
+
+    def test_direct_sum_exact_covolume_and_gram_invariants(self):
+        for copies in (1, 2, 4):
+            lattice = E8DirectSum(copies)
+            self.assertEqual(
+                abs(lattice.exact_scaled2_determinant()),
+                2 ** lattice.dimension,
+            )
+            self.assertEqual(
+                lattice.exact_scaled2_gram_determinant(),
+                4 ** lattice.dimension,
+            )
+
+    def test_every_embedded_root_is_in_direct_sum(self):
+        lattice = E8DirectSum(3)
+        for block in range(3):
+            for root_index in range(240):
+                vector = lattice.embed_root(block, root_index)
+                self.assertTrue(lattice.is_lattice_vector_scaled2(vector))
+                self.assertEqual(int(vector @ vector), 8)
+
+    def test_reflection_is_block_local_and_preserves_norm(self):
+        lattice = E8DirectSum(2)
+        vector = lattice.embed_root(1, 17)
+        reflected = lattice.reflect_scaled2(vector, block=1, root_index=23)
+        self.assertTrue(lattice.is_lattice_vector_scaled2(reflected))
+        self.assertEqual(int(reflected @ reflected), int(vector @ vector))
+        self.assertTrue(np.array_equal(reflected[:8], vector[:8]))
+
+    def test_direct_sum_machine_verification_passes(self):
+        for copies in (1, 2, 4):
+            report = E8DirectSum(copies).verify()
+            self.assertEqual(report["dimension"], 8 * copies)
+            self.assertTrue(report["block_diagonal_basis_exact"])
+            self.assertTrue(report["covolume_1_exact"])
+            self.assertTrue(report["gram_determinant_1_exact"])
+            self.assertTrue(report["all_embedded_roots_are_lattice_vectors_exact"])
+            self.assertTrue(report["weyl_reflections_preserve_direct_sum_exact"])
 
 
 if __name__ == "__main__":
