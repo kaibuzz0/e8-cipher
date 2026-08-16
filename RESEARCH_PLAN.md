@@ -51,8 +51,8 @@ Verified legacy failures:
 
 ### Gate 2 — Threat model and construction choice
 
-- [ ] Define attacker capabilities and target security properties (IND-CPA / IND-CCA / KEM security).
-- [ ] Decide whether the E8 contribution belongs in a GGH-like trapdoor, LWE/Module-LWE error geometry, coding layer, or another primitive.
+- [x] Define attacker capabilities and target security properties (IND-CPA / IND-CCA / KEM security). See `research/THREAT_MODEL.md`; the primary target is an IND-CCA-secure KEM with explicit cross-key isolation, fresh CSPRNG randomness, strict decoding, and adversarial capabilities.
+- [ ] Decide whether the E8 contribution belongs in a GGH-like trapdoor, LWE/Module-LWE error geometry, coding layer, or another primitive. Current disposition: reject GGH-style successor; investigate E8-shaped LWE/Module-LWE error geometry first, with coding/reconciliation as the safer fallback.
 - [ ] Reject any design whose secret is reconstructable from public parameters.
 - [ ] Write the exact algorithms for KeyGen, Encaps/Encrypt, Decaps/Decrypt before implementation.
 - [ ] Identify the standard hardness assumption to which security should reduce.
@@ -109,7 +109,7 @@ Each research pass should:
 
 ## Current handoff
 
-Gate 0 is verified across Python 3.10–3.13. The legacy failures are captured and the public v2 API is now explicitly marked insecure with a visible runtime warning. The next highest-priority work is Gate 2: write the threat model and evaluate candidate construction families before implementing any successor cipher. Do not begin encryption code until KeyGen/Encaps/Decaps (or Encrypt/Decrypt) and the intended hardness assumption are written down and attackable on paper.
+Gate 0 passed the Python 3.10–3.13 matrix. Gate 1 failures are captured, and the public legacy wrapper now carries an explicit runtime security warning pending confirmation on the latest CI head. Gate 2 now has a written threat model grounded against the modern KEM/Module-LWE baseline. The next highest-priority research question is whether an exact E8-shaped error distribution can be covered by a credible LWE/Module-LWE hardness result; do not implement a successor KEM until that question and the exact KeyGen/Encaps/Decaps algorithms are resolved on paper.
 
 ## Website
 
