@@ -28,17 +28,23 @@ This repository is **research software, not production cryptography** until a co
 - [x] Add exact/rational verification to remove dependence on float tolerances.
 - [x] Add E8 Weyl reflections over the full 240-root system.
 - [x] Verify reflections preserve root membership and norms.
-- [ ] Add E8^N direct-sum construction with explicit invariants.
+- [ ] Add E8^N direct-sum construction with explicit invariants. Implementation and tests are now present on the research branch; mark complete only after the new multi-version CI run passes.
 
 **Exit criterion:** mathematical tests demonstrate that all objects labeled E8 are actually E8-derived.
 
 ### Gate 1 — Legacy cipher containment
 
-- [ ] Add regression test proving the old fixed decoding basis can be reconstructed.
-- [ ] Add regression test proving the old encrypt() reuses its RNG stream.
+- [ ] Add regression test proving the old fixed decoding basis can be reconstructed. Test added on the research branch; awaiting CI verification.
+- [ ] Add regression test proving the old encrypt() reuses its RNG stream. Tests added for identical ciphertext reuse and ciphertext-difference cancellation; awaiting CI verification.
 - [ ] Mark legacy cipher API as insecure/deprecated in runtime and docs.
 - [ ] Remove private-seed-derived pseudo-nonce from any successor design.
 - [ ] Decide whether legacy code remains only as a documented broken-design specimen.
+
+Additional captured legacy evidence awaiting CI verification:
+
+- unrelated private keys can cross-decrypt ciphertext;
+- the effective decoding basis/perturbation is identical across unrelated keys;
+- the legacy nonce is a constant prefix derived from private seed material.
 
 **Exit criterion:** known catastrophic failures are captured as tests and cannot silently re-enter a successor design.
 
@@ -102,7 +108,7 @@ Each research pass should:
 
 ## Current handoff
 
-Gate 0 exact arithmetic and full Weyl-root closure are verified. The next highest-priority item is the E8^N direct-sum construction with explicit invariants; after that, Gate 0 can be closed and work should move to legacy-break regression tests.
+The E8^N direct-sum implementation and explicit invariant tests are now present, together with the first legacy-break regression suite. The current GitHub Actions matrix must pass before Gate 0 or those Gate 1 test items are checked off. If it passes, the next change should mark the legacy API insecure/deprecated and update the public research dashboard with the verified negative results. If it fails, use the per-test JUnit/traceback diagnostics to fix the exact failing invariant or regression case first.
 
 ## Website
 
