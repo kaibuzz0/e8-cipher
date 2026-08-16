@@ -16,84 +16,73 @@ P_{s,R}[X=x] \propto \exp(-\pi\|x\|^2/s^2)
 
 on the finite set `E8 ∩ B_R(0)`. Blocks are iid. For modular arithmetic the proposed research representation is the integral scaled vector `Y=2X`.
 
-The distribution is therefore:
-
-- finite and bounded;
-- centrally symmetric;
-- radially weighted;
-- isotropic in covariance by E8 Weyl symmetry;
-- correlated within each 8-coordinate block;
-- independent across blocks by definition.
+The distribution is therefore finite, bounded, centrally symmetric, radially weighted, isotropic in covariance by E8 Weyl symmetry, correlated within each 8-coordinate block, and independent across blocks by definition.
 
 ## Classic LWE result
 
-Regev's foundational LWE reduction and later standard LWE reductions use specific Gaussian error formulations. They establish the importance of Gaussian-type error but do not provide a direct theorem saying that an arbitrary block-correlated finite distribution may replace the specified error law.
+Regev's foundational LWE reduction and later standard LWE reductions use specific Gaussian error formulations. They do not provide a direct theorem saying that an arbitrary block-correlated finite distribution may replace the specified error law.
 
 **Result:** classic LWE Gaussian reductions are **not direct coverage** for the proposed truncated E8 block distribution.
 
 ## Standard Module-LWE result
 
-Langlois and Stehle's Module-LWE worst-case/average-case framework gives hardness for Module-LWE under its stated module/ring and error-distribution conditions. The standard theoretical formulation is Gaussian in the appropriate module/ring embedding. The fact that E8 is a lattice and the PMF is radially exponential does not make the proposed coefficient-block distribution identical to that Gaussian formulation.
+Langlois and Stehle's Module-LWE worst-case/average-case framework gives hardness under its stated module/ring and error-distribution conditions. The fact that E8 is a lattice and the PMF is radially exponential does not make the proposed coefficient-block distribution identical to the theorem's standard Gaussian formulation.
 
-**Result:** the standard Module-LWE reduction is **not yet direct coverage** for the E8 coefficient-block substitution.
+**Result:** the standard Module-LWE reduction is **not direct coverage** for the E8 coefficient-block substitution.
 
 ## PKC 2026 general-distribution result
 
-A materially relevant new result exists:
+Katharina Boudgoust, Corentin Jeudy, Erkan Tairi, and Weiqiang Wen, *Hardness of M-LWE with General Distributions and Applications to Leaky Variants*, PKC 2026, pp. 3–37, DOI `10.1007/978-3-032-26731-3_1` (full version ePrint 2025/1472), state that search M-LWE remains hard when the error vector follows an **arbitrary bounded distribution with sufficient entropy**, with a restriction on the number of samples.
 
-Katharina Boudgoust, Corentin Jeudy, Erkan Tairi, and Weiqiang Wen, *Hardness of M-LWE with General Distributions and Applications to Leaky Variants*, PKC 2026, pp. 3–37, DOI `10.1007/978-3-032-26731-3_1` (full version ePrint 2025/1472).
+The candidate is bounded and has explicitly computable min-entropy, so this theorem family is materially relevant. But qualitative similarity is not theorem verification.
 
-The authors state that M-LWE remains hard when the error vector follows an **arbitrary bounded distribution with sufficient entropy**, with restrictions including the number of samples. This is substantially more general than the older Gaussian-only theoretical baseline and is potentially relevant to a truncated E8 distribution.
+## Parameter worksheet
 
-Our candidate is bounded, so it passes the first qualitative filter. Its min-entropy is explicitly computable from its normalization constant:
+`research/PKC2026_PARAMETER_WORKSHEET.md` is now the authoritative Gate-2 theorem audit. It contains five explicit `(s,R,q,n,k,m)` candidates and marks every condition **PASS**, **FAIL**, or **UNRESOLVED**.
 
-\[
-H_\infty(X)=\log_2 Z_{s,R}.
-\]
+Candidate-side quantities currently checked include:
 
-For iid blocks, min-entropy adds.
+- exact E8 shell/support sizes for the selected cutoffs;
+- `Z_{s,R}` and `H_inf(block)=log2 Z_{s,R}`;
+- total candidate min-entropy under the proposed iid coefficient-block interpretation;
+- block alignment `8 | n`;
+- the sufficient centered no-wrap check `4R < q` for `Y=2X`.
 
-However, qualitative similarity is not theorem verification.
+All five candidates pass those candidate-side sanity checks. **None is marked theorem-PASS.**
+
+## Theorem retrieval limitation recorded, not hidden
+
+The official Springer page exposes the publication abstract and technical notes but gates the theorem body in this environment. The HAL manuscript `lirmm-05396885v2` is also blocked here by its anti-bot access layer. A later primary research paper explicitly reports that `[BJTW25, Theorem 4.1]` requires an auxiliary rank-`(m-n)` SIS problem to remain hard, confirming that sample count is coupled to an additional hardness obligation, but that secondary statement is not enough to reconstruct BJTW's omitted norm bound, entropy threshold, constants, or exact module notation.
+
+The repository therefore refuses to fabricate those inequalities. They remain `UNRESOLVED` until the full theorem body is obtained.
 
 ## Conditions still requiring exact verification
 
-Before claiming the PKC 2026 theorem covers this E8 candidate, the repository must extract and check the paper's exact hypotheses for a proposed parameter tuple. At minimum:
-
-1. **Domain:** verify that the arbitrary distribution may live in exactly the module/ring representation where the E8-derived coefficient vector is placed.
-2. **Entropy:** evaluate the theorem's required entropy lower bound and compare it with the candidate distribution's min-entropy after embedding.
-3. **Bound:** compare the theorem's required norm/support bound with the scaled E8 cutoff `2R` and modulus.
-4. **Samples:** satisfy the theorem's stated sample-count restriction.
-5. **Dimensions:** satisfy its number-field degree/module-rank conditions.
-6. **Embedding:** prove that grouping coefficients into public 8-coordinate E8 blocks is still an instance of the theorem's allowed arbitrary distribution rather than an unproved structural transformation.
-7. **Secret law:** verify the future secret distribution separately; coverage of an error law does not automatically justify whatever secret law a future KEM chooses.
-8. **Concrete security:** even theorem coverage would not provide a concrete attack estimate for a new structured distribution and parameter set.
-
-No `(s,R,q,n,k,m)` parameter tuple has yet been checked against all of those conditions.
+1. **Entropy:** the exact BJTW min-entropy lower bound.
+2. **Samples:** the exact sample-count interval/restriction and notation mapping.
+3. **Auxiliary SIS:** the exact SIS rank/dimension, norm bound, modulus, and hardness requirement.
+4. **Domain:** the theorem's ring/number-field/module representation.
+5. **Embedding:** whether public 8-coordinate coefficient grouping is an allowed arbitrary distribution rather than an unproved problem transformation.
+6. **Secret law:** separate conditions if a future construction also changes the secret distribution.
+7. **Concrete security:** attack estimates remain necessary even if asymptotic theorem coverage succeeds.
 
 ## Current verdict
 
 **Not proven covered; not proven impossible.**
 
-The earlier research note said no published reduction had been established for the E8-block idea. That remains true as a repository security claim, but the literature search has found a stronger opportunity than previously recorded: the PKC 2026 general-distribution theorem may cover bounded E8 errors if its quantitative hypotheses and representation model are satisfied.
-
-Therefore this project SHALL NOT:
-
-- claim E8 errors inherit ML-KEM security;
-- cite E8 density or Weyl symmetry as a hardness proof;
-- implement a successor KEM before the theorem conditions are checked;
-- silently replace the theorem's ring/module distribution with an 8-coordinate coefficient construction.
+E8 has not yet earned a place inside the secrecy assumption. The project now has enough candidate-side mathematics to evaluate the theorem immediately once its exact quantitative statement is available, but it will not treat the word “arbitrary” in the abstract as permission to skip the theorem's entropy, sample, SIS, or algebraic-domain hypotheses.
 
 ## Fallback decision
 
-If no useful E8 parameter tuple satisfies the theorem's hypotheses, or if the necessary embedding changes the problem outside the theorem, record that as a negative result. In that case E8 should move outside the secrecy assumption and be evaluated only as a reconciliation, coding, or quantization layer around a standard KEM.
+If no useful E8 parameter tuple satisfies every indispensable theorem hypothesis, or if the E8 coefficient-block embedding changes the problem outside the theorem, record that as a negative result. In that case E8 moves outside the secrecy assumption and is evaluated only as a reconciliation, coding, or quantization layer around a standard KEM.
 
 ## Sources checked
 
 - O. Regev, *On Lattices, Learning with Errors, Random Linear Codes, and Cryptography*.
 - A. Langlois, D. Stehle, *Worst-case to average-case reductions for module lattices*, Designs, Codes and Cryptography 75 (2015), 565–599.
-- K. Boudgoust, C. Jeudy, E. Tairi, W. Wen, *Hardness of M-LWE with General Distributions and Applications to Leaky Variants*, PKC 2026, 3–37.
+- K. Boudgoust, C. Jeudy, E. Tairi, W. Wen, *Hardness of M-LWE with General Distributions and Applications to Leaky Variants*, PKC 2026, 3–37 / ePrint 2025/1472.
 - NIST FIPS 203, *Module-Lattice-Based Key-Encapsulation Mechanism Standard*.
 
 ## Handoff
 
-The next pass should obtain the full PKC 2026 theorem statement and turn its hypotheses into a parameter-check worksheet. Then choose small research candidates `(s,R,q,n,k,m)`, compute support/min-entropy and scaled norm bounds, and mark each theorem hypothesis PASS/FAIL/UNRESOLVED. A KEM specification remains blocked until at least one useful tuple passes without an unproved embedding step.
+Obtain the full BJTW theorem body through ePrint, HAL, or an author-provided full-text path. Preserve its exact variable definitions and quantitative inequalities in `PKC2026_PARAMETER_WORKSHEET.md`, then evaluate each candidate cell reproducibly. If every useful tuple fails an indispensable condition, formally close the secrecy-core E8 track and begin reconciliation/coding experiments.
