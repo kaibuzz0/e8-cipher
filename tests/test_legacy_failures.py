@@ -10,9 +10,16 @@ import unittest
 import numpy as np
 
 from e8_core import E8Cipher
+from e8_cipher import E8Cipher as LegacyPublicAPI, LegacyCipherSecurityWarning
 
 
 class TestLegacyCipherFailures(unittest.TestCase):
+    def test_public_api_emits_visible_insecure_legacy_warning(self):
+        with self.assertWarns(LegacyCipherSecurityWarning) as caught:
+            LegacyPublicAPI(private_seed=b"warning-regression-key-material!!!", N=4)
+        self.assertIn("archived insecure v2 research specimen", str(caught.warning))
+        self.assertIn("must not be used to protect secrets", str(caught.warning))
+
     def test_private_decoding_basis_is_identical_across_unrelated_keys(self):
         alice = E8Cipher(private_seed=b"alice-independent-key-material-000", N=4)
         bob = E8Cipher(private_seed=b"bob-independent-key-material---000", N=4)
