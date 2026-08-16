@@ -25,7 +25,7 @@ This worksheet deliberately distinguishes three statuses:
 
 ## Source-access result
 
-The official Springer PKC 2026 page confirms the published result and states that search M-LWE remains hard when the error vector follows an **arbitrary bounded distribution with sufficient entropy**, with a restriction on the number of samples. The same page also exposes technical notes about norm balls and truncation, but the theorem body containing the quantitative hypotheses is subscription-gated in the accessible HTML. The open HAL record `lirmm-05396885v2` is protected by an anti-bot gate in this execution environment. The IACR full version is ePrint 2025/1472, but its PDF body was likewise not retrievable by the available web/PDF path during this pass.
+The official Springer PKC 2026 page confirms the published result and states that search M-LWE remains hard when the error vector follows an **arbitrary bounded distribution with sufficient entropy**, with a restriction on the number of samples. The same page exposes technical notes about norm balls and truncation, but the theorem body containing the quantitative hypotheses is subscription-gated in the accessible HTML. The open HAL record `lirmm-05396885v2` is protected by an anti-bot gate in this execution environment. The IACR full version is ePrint 2025/1472, but its PDF body was likewise not retrievable by the available web/PDF path during this pass.
 
 A later primary research paper comparing its own leakage reduction with BJTW explicitly states that `[BJTW25, Theorem 4.1]` additionally requires a rank-`(m-n)` SIS problem to be sufficiently hard and therefore imposes a lower bound on the number of samples `m`. This is useful structural evidence, but it is **not a substitute for the BJTW theorem body** and does not justify inventing the omitted SIS norm parameter, entropy threshold, or constants.
 
@@ -160,8 +160,17 @@ Keep E8 inside the secrecy-core research track only if all of the following beco
 
 If any indispensable condition is proven FAIL for all useful tuples, move E8 out of the secrecy assumption and evaluate it only for reconciliation, coding, or quantization around a standard KEM.
 
+## Retrieval/source record
+
+Primary publication metadata and accessible claims:
+
+- Boudgoust, Jeudy, Tairi, Wen, *Hardness of M-LWE with General Distributions and Applications to Leaky Variants*, PKC 2026, LNCS 16551, pp. 3–37, DOI `10.1007/978-3-032-26731-3_1`; full version ePrint 2025/1472.
+- Official Springer preview: confirms arbitrary bounded errors with sufficient entropy and a sample-number restriction; its notes explicitly discuss integer points in norm balls and say a general distribution can be truncated to enforce a norm bound.
+- HAL/LIRMM record: `lirmm-05396885v2` (full-text link access-blocked in this execution environment).
+- A later primary research paper, *Leaky LWE: Learning with Errors with Semi-Adaptive Secret- and Error-Leakage*, identifies BJTW Theorem 4.1 as requiring hardness of a rank-`(m-n)` SIS problem in the LWE setting, which imposes a lower bound on `m`.
+
 ## Next retrieval target
 
-Obtain the full text of ePrint 2025/1472 or the HAL manuscript through a source that exposes the theorem body. Transcribe the relevant theorem(s) **verbatim at the equation level but paraphrased in prose**, preserving variable definitions, then replace every `UNRESOLVED` quantitative cell above with a reproducible calculation.
+Obtain the full text of ePrint 2025/1472 or the HAL manuscript through a source that exposes the theorem body. Transcribe the relevant theorem(s) **at the equation level while paraphrasing surrounding prose**, preserving variable definitions, then replace every `UNRESOLVED` quantitative cell above with a reproducible calculation.
 
 Do not design successor `KeyGen`, `Encaps`, or `Decaps` while the overall theorem-coverage column is unresolved.
