@@ -28,25 +28,26 @@ This repository is **research software, not production cryptography** until a co
 - [x] Add exact/rational verification to remove dependence on float tolerances.
 - [x] Add E8 Weyl reflections over the full 240-root system.
 - [x] Verify reflections preserve root membership and norms.
-- [ ] Add E8^N direct-sum construction with explicit invariants. Implementation and tests are now present on the research branch; mark complete only after the new multi-version CI run passes.
+- [x] Add E8^N direct-sum construction with explicit invariants. Verified by the Python 3.10–3.13 GitHub Actions matrix in run #19.
 
-**Exit criterion:** mathematical tests demonstrate that all objects labeled E8 are actually E8-derived.
+**Exit criterion met:** mathematical tests demonstrate that all objects in the active research substrate labeled E8 are actually E8-derived.
 
 ### Gate 1 — Legacy cipher containment
 
-- [ ] Add regression test proving the old fixed decoding basis can be reconstructed. Test added on the research branch; awaiting CI verification.
-- [ ] Add regression test proving the old encrypt() reuses its RNG stream. Tests added for identical ciphertext reuse and ciphertext-difference cancellation; awaiting CI verification.
-- [ ] Mark legacy cipher API as insecure/deprecated in runtime and docs.
-- [ ] Remove private-seed-derived pseudo-nonce from any successor design.
-- [ ] Decide whether legacy code remains only as a documented broken-design specimen.
+- [x] Add regression test proving the old fixed decoding basis can be reconstructed/shared across unrelated keys. Verified in CI run #19.
+- [x] Add regression test proving the old encrypt() reuses its RNG stream. Verified in CI run #19, including identical-ciphertext reuse and ciphertext-difference cancellation.
+- [x] Mark legacy cipher API as insecure/deprecated in runtime and docs. The public compatibility wrapper now emits `LegacyCipherSecurityWarning`; dashboard documentation labels v2 as a broken-design specimen.
+- [x] Remove private-seed-derived pseudo-nonce from any successor design. No successor protocol exists yet; the design rules explicitly prohibit secret-derived randomness/nonces, while the legacy pseudo-nonce remains only as captured failure evidence.
+- [x] Decide whether legacy code remains only as a documented broken-design specimen. Decision: retain it for reproducibility and adversarial regression tests, never as a candidate protocol.
 
-Additional captured legacy evidence awaiting CI verification:
+Verified legacy failures:
 
-- unrelated private keys can cross-decrypt ciphertext;
-- the effective decoding basis/perturbation is identical across unrelated keys;
-- the legacy nonce is a constant prefix derived from private seed material.
+- unrelated private keys share the effective decoding basis and can cross-decrypt ciphertext;
+- repeated encryption restarts the same RNG stream;
+- subtracting equal-length ciphertexts cancels the reused lattice mask/noise and exposes plaintext differences;
+- the legacy `nonce` is a constant prefix derived from private seed material.
 
-**Exit criterion:** known catastrophic failures are captured as tests and cannot silently re-enter a successor design.
+**Exit criterion:** known catastrophic failures are captured as tests and cannot silently re-enter a successor design. The runtime-warning addition must pass the current multi-version CI before Gate 1 is considered fully closed operationally.
 
 ### Gate 2 — Threat model and construction choice
 
@@ -108,7 +109,7 @@ Each research pass should:
 
 ## Current handoff
 
-The E8^N direct-sum implementation and explicit invariant tests are now present, together with the first legacy-break regression suite. The current GitHub Actions matrix must pass before Gate 0 or those Gate 1 test items are checked off. If it passes, the next change should mark the legacy API insecure/deprecated and update the public research dashboard with the verified negative results. If it fails, use the per-test JUnit/traceback diagnostics to fix the exact failing invariant or regression case first.
+Gate 0 is verified across Python 3.10–3.13. The legacy failures are captured and the public v2 API is now explicitly marked insecure with a visible runtime warning. The next highest-priority work is Gate 2: write the threat model and evaluate candidate construction families before implementing any successor cipher. Do not begin encryption code until KeyGen/Encaps/Decaps (or Encrypt/Decrypt) and the intended hardness assumption are written down and attackable on paper.
 
 ## Website
 
