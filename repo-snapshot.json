@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-16T23:58:57Z",
+  "source_commit": "686a82f9c0fe2afb9d032bff559604ead2c355b8",
+  "repo": {
+    "id": "e8-cipher",
+    "full_name": "kaibuzz0/e8-cipher",
+    "url": "https://github.com/kaibuzz0/e8-cipher",
+    "default_branch": "main"
+  },
+  "stats": {
+    "tracked_files": 18,
+    "python_files": 5,
+    "javascript_typescript_files": 0,
+    "workflow_files": 3,
+    "test_files": 2
+  },
+  "tools": [],
+  "toolsets": [],
+  "cases": [],
+  "opportunities": [],
+  "intelligence": [],
+  "sources": [],
+  "prompts": [],
+  "evidence": [],
+  "agent_ops": {},
+  "activity": [
+    {
+      "id": "686a82f9c0fe2afb9d032bff559604ead2c355b8",
+      "type": "commit",
+      "title": "Connect repository to GitHub Command Site",
+      "timestamp": "2026-08-16T18:58:51-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/686a82f9c0fe2afb9d032bff559604ead2c355b8"
+    },
+    {
+      "id": "5bf3ac49b522bb670b4402936dccd1e2f50d4fbd",
+      "type": "commit",
+      "title": "Merge pull request #2 from kaibuzz0/agent/pkc2026-author-slides-audit",
+      "timestamp": "2026-08-16T18:54:37-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/5bf3ac49b522bb670b4402936dccd1e2f50d4fbd"
+    },
+    {
+      "id": "560d148576ada3d611fe3d6d374e7826c42c396f",
+      "type": "commit",
+      "title": "research: add PKC 2026 author-slides hardness audit",
+      "timestamp": "2026-08-16T13:43:20-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/560d148576ada3d611fe3d6d374e7826c42c396f"
+    },
+    {
+      "id": "77b6ffa166e0645459a21cc2656b1b2eee648117",
+      "type": "commit",
+      "title": "Merge pull request #1 from kaibuzz0/agent/e8-research-foundation",
+      "timestamp": "2026-08-16T11:25:55-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/77b6ffa166e0645459a21cc2656b1b2eee648117"
+    },
+    {
+      "id": "29a970ed581e2578043226ac83627db8cea5ffd5",
+      "type": "commit",
+      "title": "research: clarify source confidence",
+      "timestamp": "2026-08-16T10:26:21-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/29a970ed581e2578043226ac83627db8cea5ffd5"
+    },
+    {
+      "id": "c421c4fd7f40ebf7fcdc13f195fada46c598e00e",
+      "type": "commit",
+      "title": "research: record theorem audit sources",
+      "timestamp": "2026-08-16T10:25:51-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/c421c4fd7f40ebf7fcdc13f195fada46c598e00e"
+    },
+    {
+      "id": "cf692903cbb2023a6afedaf34a4264bc9d55223a",
+      "type": "commit",
+      "title": "research: link theorem audit worksheet",
+      "timestamp": "2026-08-16T10:24:51-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/cf692903cbb2023a6afedaf34a4264bc9d55223a"
+    },
+    {
+      "id": "811767e93677ba44cbbc570a6400774effbc6c4a",
+      "type": "commit",
+      "title": "docs: surface PKC 2026 theorem audit",
+      "timestamp": "2026-08-16T10:24:30-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/811767e93677ba44cbbc570a6400774effbc6c4a"
+    },
+    {
+      "id": "7eec7b31a58232af9143beebea48509b6b1f0ad0",
+      "type": "commit",
+      "title": "research: record theorem-audit worksheet",
+      "timestamp": "2026-08-16T10:23:55-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/7eec7b31a58232af9143beebea48509b6b1f0ad0"
+    },
+    {
+      "id": "b3a49d20caccf229d66af761b5f6c0c74eb7f41d",
+      "type": "commit",
+      "title": "research: add PKC 2026 parameter worksheet",
+      "timestamp": "2026-08-16T10:23:28-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/b3a49d20caccf229d66af761b5f6c0c74eb7f41d"
+    }
+  ],
+  "links": [
+    {
+      "id": "github",
+      "name": "GitHub repository",
+      "url": "https://github.com/kaibuzz0/e8-cipher"
+    },
+    {
+      "id": "actions",
+      "name": "GitHub Actions",
+      "url": "https://github.com/kaibuzz0/e8-cipher/actions"
+    },
+    {
+      "id": "issues",
+      "name": "Issues",
+      "url": "https://github.com/kaibuzz0/e8-cipher/issues"
+    }
+  ]
+}
