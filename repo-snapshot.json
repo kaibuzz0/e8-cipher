@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-16T23:58:57Z",
-  "source_commit": "686a82f9c0fe2afb9d032bff559604ead2c355b8",
+  "generated_at": "2026-08-17T00:18:56Z",
+  "source_commit": "5815a311c9e51f78b9ad550bf98c5926d9095cc7",
   "repo": {
     "id": "e8-cipher",
     "full_name": "kaibuzz0/e8-cipher",
@@ -15,6 +15,147 @@
     "workflow_files": 3,
     "test_files": 2
   },
+  "repository_tree": {
+    "total_files": 18,
+    "total_directories": 5,
+    "files_truncated": false,
+    "directories_truncated": false,
+    "top_level": [
+      ".github",
+      "README.md",
+      "RESEARCH_PLAN.md",
+      "docs",
+      "e8_cipher.py",
+      "e8_core.py",
+      "requirements.txt",
+      "research",
+      "tests"
+    ],
+    "directories": [
+      {
+        "path": ".github",
+        "name": ".github",
+        "depth": 1,
+        "file_count": 3
+      },
+      {
+        "path": ".github/workflows",
+        "name": "workflows",
+        "depth": 2,
+        "file_count": 3
+      },
+      {
+        "path": "docs",
+        "name": "docs",
+        "depth": 1,
+        "file_count": 1
+      },
+      {
+        "path": "research",
+        "name": "research",
+        "depth": 1,
+        "file_count": 7
+      },
+      {
+        "path": "tests",
+        "name": "tests",
+        "depth": 1,
+        "file_count": 2
+      }
+    ],
+    "files": [
+      {
+        "path": ".github/workflows/command-site-snapshot.yml",
+        "name": "command-site-snapshot.yml",
+        "extension": ".yml"
+      },
+      {
+        "path": ".github/workflows/pages.yml",
+        "name": "pages.yml",
+        "extension": ".yml"
+      },
+      {
+        "path": ".github/workflows/verify.yml",
+        "name": "verify.yml",
+        "extension": ".yml"
+      },
+      {
+        "path": "README.md",
+        "name": "README.md",
+        "extension": ".md"
+      },
+      {
+        "path": "RESEARCH_PLAN.md",
+        "name": "RESEARCH_PLAN.md",
+        "extension": ".md"
+      },
+      {
+        "path": "docs/index.html",
+        "name": "index.html",
+        "extension": ".html"
+      },
+      {
+        "path": "e8_cipher.py",
+        "name": "e8_cipher.py",
+        "extension": ".py"
+      },
+      {
+        "path": "e8_core.py",
+        "name": "e8_core.py",
+        "extension": ".py"
+      },
+      {
+        "path": "requirements.txt",
+        "name": "requirements.txt",
+        "extension": ".txt"
+      },
+      {
+        "path": "research/E8_ERROR_DISTRIBUTION.md",
+        "name": "E8_ERROR_DISTRIBUTION.md",
+        "extension": ".md"
+      },
+      {
+        "path": "research/E8_HARDNESS_COVERAGE.md",
+        "name": "E8_HARDNESS_COVERAGE.md",
+        "extension": ".md"
+      },
+      {
+        "path": "research/E8_LWE_FEASIBILITY.md",
+        "name": "E8_LWE_FEASIBILITY.md",
+        "extension": ".md"
+      },
+      {
+        "path": "research/PKC2026_AUTHOR_SLIDES_AUDIT.md",
+        "name": "PKC2026_AUTHOR_SLIDES_AUDIT.md",
+        "extension": ".md"
+      },
+      {
+        "path": "research/PKC2026_PARAMETER_WORKSHEET.md",
+        "name": "PKC2026_PARAMETER_WORKSHEET.md",
+        "extension": ".md"
+      },
+      {
+        "path": "research/THREAT_MODEL.md",
+        "name": "THREAT_MODEL.md",
+        "extension": ".md"
+      },
+      {
+        "path": "research/e8_lattice.py",
+        "name": "e8_lattice.py",
+        "extension": ".py"
+      },
+      {
+        "path": "tests/test_e8_lattice.py",
+        "name": "test_e8_lattice.py",
+        "extension": ".py"
+      },
+      {
+        "path": "tests/test_legacy_failures.py",
+        "name": "test_legacy_failures.py",
+        "extension": ".py"
+      }
+    ]
+  },
   "tools": [],
   "toolsets": [],
   "cases": [],
@@ -25,6 +166,13 @@
   "evidence": [],
   "agent_ops": {},
   "activity": [
+    {
+      "id": "5815a311c9e51f78b9ad550bf98c5926d9095cc7",
+      "type": "commit",
+      "title": "Command site: enable repository Explorer snapshots",
+      "timestamp": "2026-08-16T19:18:49-05:00",
+      "url": "https://github.com/kaibuzz0/e8-cipher/commit/5815a311c9e51f78b9ad550bf98c5926d9095cc7"
+    },
     {
       "id": "686a82f9c0fe2afb9d032bff559604ead2c355b8",
       "type": "commit",
@@ -87,13 +235,6 @@
       "title": "research: record theorem-audit worksheet",
       "timestamp": "2026-08-16T10:23:55-05:00",
       "url": "https://github.com/kaibuzz0/e8-cipher/commit/7eec7b31a58232af9143beebea48509b6b1f0ad0"
-    },
-    {
-      "id": "b3a49d20caccf229d66af761b5f6c0c74eb7f41d",
-      "type": "commit",
-      "title": "research: add PKC 2026 parameter worksheet",
-      "timestamp": "2026-08-16T10:23:28-05:00",
-      "url": "https://github.com/kaibuzz0/e8-cipher/commit/b3a49d20caccf229d66af761b5f6c0c74eb7f41d"
     }
   ],
   "links": [
